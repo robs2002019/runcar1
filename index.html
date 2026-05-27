@@ -47,8 +47,9 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .badge-r{background:rgba(255,23,68,.15);color:var(--red);border:1px solid var(--red);}
 .badge-b{background:rgba(41,121,255,.15);color:var(--blue);border:1px solid var(--blue);}
 .badge-y{background:rgba(255,214,0,.15);color:var(--yellow);border:1px solid var(--yellow);}
-#map,#driverMap{height:240px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
-#chatMapCliente,#chatMapDriver{height:280px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
+/* mapa solo en chat, no en driver section principal */
+#map{height:240px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
+#chatMapCliente,#chatMapDriver{height:300px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
 .chat-box{height:200px;overflow-y:auto;background:#111;padding:10px;border-radius:10px;margin-top:8px;border:1px solid #2a2a2a;}
 .msg{padding:8px 12px;border-radius:10px;margin-bottom:7px;background:#2a2a2a;font-size:13px;max-width:85%;}
 .msg b{font-size:12px;color:var(--sub);display:block;margin-bottom:2px;}
@@ -76,6 +77,8 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .modal.open{display:flex;}
 .modal-box{background:var(--card);border:1px solid #2a2a2a;width:100%;max-width:500px;border-radius:20px;padding:16px;margin:auto;}
 .modal-title{font-family:"Rajdhani",sans-serif;font-size:20px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--g);letter-spacing:1px;}
+
+/* OFERTA TOAST — cliente ve ofertas una a una */
 .oferta-toast{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9500;padding:12px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.7));pointer-events:none;}
 .oferta-toast.visible{display:block;}
 .oferta-card{background:var(--card);border:2px solid var(--yellow);border-radius:16px;padding:14px;pointer-events:all;box-shadow:0 -4px 30px rgba(255,214,0,.3);animation:slideUp .3s ease;}
@@ -87,17 +90,25 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .oferta-card-monto{font-family:"Rajdhani",sans-serif;font-size:32px;font-weight:700;color:var(--yellow);text-align:center;padding:6px 0;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;margin:8px 0;}
 .oferta-card-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
 .oferta-card-btns button{margin-top:0;padding:12px;}
-.admin-table{width:100%;border-collapse:collapse;font-size:13px;}
-.admin-table th{background:#1a1a1a;color:var(--g);padding:8px;text-align:left;font-family:"Rajdhani",sans-serif;letter-spacing:.5px;}
-.admin-table td{padding:8px;border-bottom:1px solid #2a2a2a;vertical-align:middle;}
-.admin-table tr:hover td{background:#1e1e1e;}
-#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;padding:10px 22px;border-radius:30px;font-weight:700;font-size:14px;z-index:99999;display:none;font-family:"Rajdhani",sans-serif;letter-spacing:1px;box-shadow:0 4px 20px rgba(0,230,118,.4);}
-.estado-badge{display:none;text-align:center;padding:9px;border-radius:10px;font-family:"Rajdhani",sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:10px;}
-.estado-buscando{background:rgba(255,214,0,.12);border:1px solid var(--yellow);color:var(--yellow);display:block;}
-.estado-ofertas{background:rgba(41,121,255,.12);border:1px solid var(--blue);color:var(--blue);display:block;}
-.estado-aceptado{background:rgba(0,230,118,.12);border:1px solid var(--g);color:var(--g);display:block;}
-.asignado-msg{background:rgba(255,214,0,.1);border:1px solid var(--yellow);color:var(--yellow);border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:700;margin-bottom:8px;display:none;}
-.ofertas-contador{background:rgba(41,121,255,.15);border:1px solid var(--blue);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--blue);font-weight:700;text-align:center;margin-bottom:8px;display:none;}
+
+/* TIMER DE OFERTAS (cliente) — 180s */
+.timer-ofertas-wrap{display:none;background:linear-gradient(135deg,rgba(41,121,255,.12),rgba(41,121,255,.05));border:1px solid var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:10px;align-items:center;gap:12px;}
+.timer-ofertas-wrap.visible{display:flex;}
+.timer-ofertas-circle{position:relative;width:56px;height:56px;flex-shrink:0;}
+.timer-ofertas-circle svg{transform:rotate(-90deg);}
+.timer-ofertas-bg{fill:none;stroke:#2a2a2a;stroke-width:5;}
+.timer-ofertas-prog{fill:none;stroke:var(--blue);stroke-width:5;stroke-linecap:round;stroke-dasharray:138.2;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear;}
+.timer-ofertas-prog.urgent{stroke:var(--red);}
+.timer-ofertas-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Rajdhani",sans-serif;font-size:15px;font-weight:700;color:var(--blue);}
+.timer-ofertas-num.urgent{color:var(--red);}
+.timer-ofertas-info{flex:1;}
+.timer-ofertas-title{font-family:"Rajdhani",sans-serif;font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.5px;}
+.timer-ofertas-title.urgent{color:var(--red);}
+.timer-ofertas-sub{font-size:11px;color:var(--sub);margin-top:2px;}
+@keyframes pulse-urgent{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,.4);}50%{box-shadow:0 0 0 8px rgba(255,23,68,0);}}
+.timer-ofertas-wrap.urgent-pulse{animation:pulse-urgent 1s ease infinite;}
+
+/* TIMER PUBLICACION (buscando) */
 .timer-wrap{display:none;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(255,109,0,.15),rgba(255,109,0,.05));border:1px solid var(--orange);border-radius:12px;padding:10px 14px;margin-bottom:10px;}
 .timer-wrap.visible{display:flex;}
 .timer-circle{position:relative;width:54px;height:54px;flex-shrink:0;}
@@ -111,26 +122,62 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .timer-text-title{font-family:"Rajdhani",sans-serif;font-size:14px;font-weight:700;color:var(--orange);letter-spacing:1px;}
 .timer-text-title.urgent{color:var(--red);}
 .timer-text-sub{font-size:11px;color:var(--sub);margin-top:2px;}
-@keyframes pulse-urgent{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,.4);}50%{box-shadow:0 0 0 8px rgba(255,23,68,0);}}
-.timer-wrap.urgent-pulse{animation:pulse-urgent 1s ease infinite;}
+@keyframes pulse-urgent2{0%,100%{box-shadow:0 0 0 0 rgba(255,109,0,.4);}50%{box-shadow:0 0 0 8px rgba(255,109,0,0);}}
+.timer-wrap.urgent-pulse{animation:pulse-urgent2 1s ease infinite;}
+
 .oferta-estado-box{border-radius:10px;padding:10px 14px;text-align:center;font-family:"Rajdhani",sans-serif;font-weight:700;font-size:13px;letter-spacing:.5px;margin:8px 0;display:none;}
 .oferta-estado-box.enviada{background:rgba(0,230,118,.12);border:1px solid var(--g);color:var(--g);}
 .oferta-estado-box.rechazada{background:rgba(255,23,68,.12);border:1px solid var(--red);color:var(--red);}
 .oferta-estado-box.aceptada{background:rgba(255,214,0,.12);border:1px solid var(--yellow);color:var(--yellow);}
+.estado-badge{display:none;text-align:center;padding:9px;border-radius:10px;font-family:"Rajdhani",sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:10px;}
+.estado-buscando{background:rgba(255,214,0,.12);border:1px solid var(--yellow);color:var(--yellow);display:block;}
+.estado-ofertas{background:rgba(41,121,255,.12);border:1px solid var(--blue);color:var(--blue);display:block;}
+.estado-aceptado{background:rgba(0,230,118,.12);border:1px solid var(--g);color:var(--g);display:block;}
+.asignado-msg{background:rgba(255,214,0,.1);border:1px solid var(--yellow);color:var(--yellow);border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:700;margin-bottom:8px;display:none;}
+.ofertas-contador{background:rgba(41,121,255,.15);border:1px solid var(--blue);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--blue);font-weight:700;text-align:center;margin-bottom:8px;display:none;}
+.admin-table{width:100%;border-collapse:collapse;font-size:13px;}
+.admin-table th{background:#1a1a1a;color:var(--g);padding:8px;text-align:left;font-family:"Rajdhani",sans-serif;letter-spacing:.5px;}
+.admin-table td{padding:8px;border-bottom:1px solid #2a2a2a;vertical-align:middle;}
+.admin-table tr:hover td{background:#1e1e1e;}
+#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;padding:10px 22px;border-radius:30px;font-weight:700;font-size:14px;z-index:99999;display:none;font-family:"Rajdhani",sans-serif;letter-spacing:1px;box-shadow:0 4px 20px rgba(0,230,118,.4);}
+/* leyenda mapa */
+.map-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);}
+.map-legend-dot{width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex-shrink:0;}
 @media(max-width:400px){.nav-tab{padding:5px 8px;font-size:11px;}.logo{font-size:16px;}.btn-logout{font-size:10px;padding:5px 8px;}}
 </style>
 </head>
 <body>
 <div id="toast"></div>
+
+<!-- TOAST OFERTA PARA CLIENTE (una a una) -->
 <div class="oferta-toast" id="ofertaToast">
   <div class="oferta-card">
-    <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:var(--yellow);letter-spacing:2px;margin-bottom:8px;">NUEVA OFERTA DE CONDUCTOR</div>
+    <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:var(--yellow);letter-spacing:2px;margin-bottom:8px;">OFERTA DE CONDUCTOR</div>
     <div class="oferta-card-header">
       <img id="otFoto" src="" alt="">
-      <div><div class="oferta-card-nombre" id="otNombre"></div><div class="oferta-card-vehiculo" id="otVehiculo"></div><div class="oferta-card-vehiculo" id="otPlaca"></div></div>
+      <div>
+        <div class="oferta-card-nombre" id="otNombre"></div>
+        <div class="oferta-card-vehiculo" id="otVehiculo"></div>
+        <div class="oferta-card-vehiculo" id="otPlaca"></div>
+      </div>
     </div>
     <div class="oferta-card-monto">$<span id="otMonto">0.00</span>
       <div style="font-size:12px;color:var(--sub);margin-top:2px;">Tu oferta original: $<span id="otOfertaOriginal">0.00</span></div>
+    </div>
+    <!-- timer de 180s para aceptar esta oferta -->
+    <div class="timer-ofertas-wrap visible" id="timerOfertasWrap">
+      <div class="timer-ofertas-circle">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle class="timer-ofertas-bg" cx="28" cy="28" r="22"/>
+          <circle class="timer-ofertas-prog" id="timerOfertasProg" cx="28" cy="28" r="22"/>
+        </svg>
+        <div class="timer-ofertas-num" id="timerOfertasNum">180</div>
+      </div>
+      <div class="timer-ofertas-info">
+        <div class="timer-ofertas-title" id="timerOfertasTitle">TIEMPO PARA DECIDIR</div>
+        <div class="timer-ofertas-sub" id="timerOfertasSub">Acepta o rechaza esta oferta antes de que expire</div>
+      </div>
     </div>
     <div class="oferta-card-btns">
       <button class="btn" id="btnAceptarOfertaToast">ACEPTAR</button>
@@ -138,11 +185,15 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     </div>
   </div>
 </div>
+
 <div class="nav" id="mainNav" style="display:none;">
   <div class="logo">RUNCAR</div>
   <div class="nav-right"><div class="nav-tabs" id="navTabs"></div><button class="btn-logout" id="btnLogout">SALIR</button></div>
 </div>
+
 <div class="container">
+
+<!-- AUTH -->
 <div id="authSection" class="section active">
   <div style="text-align:center;padding:30px 0 10px;">
     <div style="font-family:Rajdhani,sans-serif;font-size:36px;font-weight:700;color:var(--g);letter-spacing:3px;">RUN CAR</div>
@@ -184,11 +235,14 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <button class="btn-blue" id="btnToggleRegister" style="margin-top:8px;">REGISTRARSE</button>
   </div>
 </div>
+
+<!-- CLIENTE -->
 <div id="clienteSection" class="section">
   <div id="map"></div>
   <div class="card">
     <div class="card-title">SOLICITAR VIAJE</div>
     <div class="estado-badge" id="estadoBadge"></div>
+    <!-- Timer de publicacion (buscando conductores) -->
     <div class="timer-wrap" id="timerWrap">
       <div class="timer-circle">
         <svg width="54" height="54" viewBox="0 0 54 54">
@@ -198,7 +252,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
         <div class="timer-num" id="timerNum">200</div>
       </div>
       <div class="timer-text">
-        <div class="timer-text-title" id="timerTitle">TIEMPO PARA OFERTAS</div>
+        <div class="timer-text-title" id="timerTitle">BUSCANDO CONDUCTORES</div>
         <div class="timer-text-sub" id="timerSub">Los conductores pueden enviarte propuestas durante este tiempo</div>
       </div>
     </div>
@@ -222,12 +276,14 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <button class="btn" id="btnPublicar" style="margin-top:6px;">PUBLICAR VIAJE</button>
     <button class="btn-red" id="btnCancelarViajePublicado" style="margin-top:6px;display:none;">CANCELAR VIAJE PUBLICADO</button>
   </div>
+
+  <!-- Chat activo cliente -->
   <div class="card" id="chatCardCliente" style="display:none;">
     <div class="card-title">VIAJE EN CURSO</div>
     <div class="chat-header-box">
       <div class="avatars">
         <div class="avatar-item"><img id="cliChatFotoCli" src="" alt=""><div class="avatar-name" id="cliChatNombreCli"></div><div class="avatar-role" style="color:var(--g);">Cliente</div></div>
-        <div style="font-size:26px;">x</div>
+        <div style="font-size:26px;">✕</div>
         <div class="avatar-item"><img id="cliChatFotoDrv" src="" alt="" style="border:2px solid var(--orange);"><div class="avatar-name" id="cliChatNombreDrv"></div><div class="avatar-role" style="color:var(--orange);">Conductor</div></div>
       </div>
       <div class="vehicle-tag"><div class="vname" id="cliChatVehiculo">-</div><div class="vplaca" id="cliChatPlaca">-</div></div>
@@ -236,6 +292,12 @@ button:hover{opacity:.88;transform:translateY(-1px);}
       <div class="map-info-item"><div class="mi-val" id="cliDistKm">-</div><div class="mi-label">KM conductor</div></div>
       <div class="map-info-item"><div class="mi-val" id="cliEta">-</div><div class="mi-label">min llegada</div></div>
       <div class="map-info-item"><div class="mi-val" id="cliDistViaje">-</div><div class="mi-label">KM viaje</div></div>
+    </div>
+    <!-- leyenda mapa -->
+    <div class="map-legend">
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff6d00;"></div>Conductor</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#00e676;"></div>Tu ubicacion / Origen</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff1744;"></div>Destino</div>
     </div>
     <div id="chatMapCliente"></div>
     <div class="chat-box" id="chatBox"></div>
@@ -250,16 +312,20 @@ button:hover{opacity:.88;transform:translateY(-1px);}
   </div>
   <div class="email-soporte">Soporte: <a href="mailto:atencionalclienteruncar@outlook.com">atencionalclienteruncar@outlook.com</a></div>
 </div>
+
+<!-- DRIVER -->
 <div id="driverSection" class="section">
   <div class="asignado-msg" id="asignadoMsg">El viaje ha sido asignado a otro conductor.</div>
-  <div id="driverMap"></div>
+  <!-- SIN mapa aqui — solo en chat -->
   <div class="card"><div class="card-title">VIAJES DISPONIBLES</div><div id="viajes"></div></div>
+
+  <!-- Chat activo driver -->
   <div class="card" id="chatCardDriver" style="display:none;">
     <div class="card-title">VIAJE EN CURSO</div>
     <div class="chat-header-box">
       <div class="avatars">
         <div class="avatar-item"><img id="drvChatFotoCli" src="" alt=""><div class="avatar-name" id="drvChatNombreCli"></div><div class="avatar-role" style="color:var(--g);">Cliente</div></div>
-        <div style="font-size:26px;">x</div>
+        <div style="font-size:26px;">✕</div>
         <div class="avatar-item"><img id="drvChatFotoDrv" src="" alt="" style="border:2px solid var(--orange);"><div class="avatar-name" id="drvChatNombreDrv"></div><div class="avatar-role" style="color:var(--orange);">Conductor</div></div>
       </div>
       <div class="vehicle-tag"><div class="vname" id="drvChatVehiculo">-</div><div class="vplaca" id="drvChatPlaca">-</div></div>
@@ -268,6 +334,12 @@ button:hover{opacity:.88;transform:translateY(-1px);}
       <div class="map-info-item"><div class="mi-val" id="drvDistKm">-</div><div class="mi-label">KM al cliente</div></div>
       <div class="map-info-item"><div class="mi-val" id="drvEta">-</div><div class="mi-label">min llegada</div></div>
       <div class="map-info-item"><div class="mi-val" id="drvDistViaje">-</div><div class="mi-label">KM viaje</div></div>
+    </div>
+    <!-- leyenda mapa driver -->
+    <div class="map-legend">
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff6d00;"></div>Tu posicion</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#00e676;"></div>Cliente / Origen</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff1744;"></div>Destino</div>
     </div>
     <div id="chatMapDriver"></div>
     <div class="chat-box" id="driverChatBox"></div>
@@ -280,6 +352,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
       <button class="btn-red" id="btnCancelarDriver" style="margin-top:0;">CANCELAR</button>
     </div>
   </div>
+
   <div class="card">
     <div class="card-title">MIS GANANCIAS (5 DIAS)</div>
     <div id="gananciasBox"></div>
@@ -294,6 +367,8 @@ button:hover{opacity:.88;transform:translateY(-1px);}
   <div class="card"><div class="card-title">MENSAJES GENERALES</div><div class="chat-box" id="mensajesGeneralesDriver" style="height:150px;"></div></div>
   <div class="email-soporte">Soporte: <a href="mailto:atencionalclienteruncar@outlook.com">atencionalclienteruncar@outlook.com</a></div>
 </div>
+
+<!-- ADMIN -->
 <div id="adminSection" class="section">
   <div class="card">
     <div class="card-title">PANEL ADMINISTRACION</div>
@@ -310,23 +385,30 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <button class="btn" id="btnAdminEnviarMsg">ENVIAR MENSAJE GLOBAL</button>
   </div>
 </div>
-</div>
+
+</div><!-- /container -->
+
+<!-- MODAL DRIVER — SOLO CONTRA-OFERTA, sin "aceptar precio del cliente" -->
 <div class="modal" id="modalDriver">
   <div class="modal-box">
     <div class="modal-title">SOLICITUD DE VIAJE</div>
     <div id="driverOfertaContenido"></div>
     <div class="oferta-estado-box" id="modalDriverEstado"></div>
-    <input type="number" id="contraOfertaDriver" placeholder="Mi oferta de precio ($)" style="margin-top:10px;">
+    <div style="background:rgba(255,109,0,.08);border:1px solid var(--orange);border-radius:10px;padding:12px;margin-top:10px;">
+      <div style="font-family:Rajdhani,sans-serif;font-size:13px;color:var(--orange);font-weight:700;letter-spacing:.5px;margin-bottom:6px;">ENVIAR MI CONTRA-OFERTA</div>
+      <input type="number" id="contraOfertaDriver" placeholder="Mi precio propuesto ($)" style="margin-top:0;">
+      <button class="btn-blue" id="btnContraOfertar" style="margin-top:8px;">ENVIAR OFERTA AL CLIENTE</button>
+      <div style="font-size:11px;color:var(--sub);margin-top:6px;text-align:center;">Maximo 3 ofertas por viaje</div>
+    </div>
     <div class="chat-box" id="driverChatPrivado" style="margin-top:8px;height:140px;"></div>
     <div style="display:flex;gap:6px;margin-top:6px;">
       <input id="driverChatInput2" placeholder="Mensaje al cliente..." style="margin-top:0;">
       <button class="btn btn-sm" id="btnDrvMsgPriv" style="width:auto;padding:10px 14px;">Enviar</button>
     </div>
-    <button class="btn" id="btnAceptarViaje" style="margin-top:10px;">ACEPTAR PRECIO DEL CLIENTE</button>
-    <button class="btn-blue" id="btnContraOfertar">ENVIAR MI OFERTA</button>
-    <button class="btn-red" id="btnRechazarViaje">RECHAZAR Y CERRAR</button>
+    <button class="btn-red" id="btnRechazarViaje" style="margin-top:10px;">CERRAR Y NO PARTICIPAR</button>
   </div>
 </div>
+
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
 import{getFirestore,collection,addDoc,setDoc,doc,getDoc,getDocs,updateDoc,onSnapshot,query,orderBy,where,limit,deleteField}from"https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
@@ -337,53 +419,90 @@ const db=getFirestore(app);
 const auth=getAuth(app);
 
 let miUid="",miRol="",miNombre="",miFoto="",isRegister=false;
-let map,driverMap,chatMapCli,chatMapDrv;
-let markerOrigen,markerDestino,routeLine,markerDrvLive,markerCliLive;
+let map,chatMapCli,chatMapDrv;
+let markerOrigen,markerDestino,routeLine;
+let markerDrvLive=null,markerCliLive=null,markerDestinoChat=null;
+let routeLineChat=null,routeDrvToCliLine=null;
 let currentChatTrip=null,viajeActivoId="",chatClienteAbierto=false,contadorOfertas=0;
 let miLat=null,miLng=null,viajeOrigenCoords=null,viajeDestinoCoords=null;
 let unsubEstadoViajes=null,unsubChatPrivado=null,unsubViajeModal=null,unsubOfertasCol=null;
+
+// Cola de ofertas pendientes de mostrar al cliente
+const ofertasQueue=[];
 const ofertasMostradas=new Set();
 let ofertaToastActual=null;
+let mostrandoOferta=false;
 
-// TIMER
-const TIMER_DUR=200,CIRC=2*Math.PI*22;
-let timerInterval=null,timerSeg=0;
+// TIMERS
+const TIMER_PUB_DUR=200; // publicacion buscando
+const TIMER_OFERTA_DUR=180; // cliente decide oferta
+const CIRC=2*Math.PI*22;
+let timerPubInterval=null,timerPubSeg=0;
+let timerOfertaInterval=null,timerOfertaSeg=0;
 
-function iniciarTimer(){
-  detenerTimer();timerSeg=TIMER_DUR;uiTimer(timerSeg);
+// ---- TIMER PUBLICACION ----
+function iniciarTimerPub(){
+  detenerTimerPub();timerPubSeg=TIMER_PUB_DUR;uiTimerPub(timerPubSeg);
   gi("timerWrap").classList.add("visible");
-  timerInterval=setInterval(()=>{timerSeg--;uiTimer(timerSeg);if(timerSeg<=0){detenerTimer();onTimerExpirado();}},1000);
+  timerPubInterval=setInterval(()=>{timerPubSeg--;uiTimerPub(timerPubSeg);if(timerPubSeg<=0){detenerTimerPub();onTimerPubExpirado();}},1000);
 }
-function detenerTimer(){
-  if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
+function detenerTimerPub(){
+  if(timerPubInterval){clearInterval(timerPubInterval);timerPubInterval=null;}
   gi("timerWrap").classList.remove("visible","urgent-pulse");
 }
-function uiTimer(s){
+function uiTimerPub(s){
   const p=gi("timerProg"),n=gi("timerNum"),t=gi("timerTitle"),w=gi("timerWrap");
-  p.style.strokeDashoffset=CIRC*(1-s/TIMER_DUR);
-  n.innerText=s;
+  p.style.strokeDashoffset=CIRC*(1-s/TIMER_PUB_DUR);n.innerText=s;
   const u=s<=30;
   p.classList.toggle("urgent",u);n.classList.toggle("urgent",u);t.classList.toggle("urgent",u);w.classList.toggle("urgent-pulse",u&&s>0);
-  t.innerText=u&&s>0?"TIEMPO CASI AGOTADO":"TIEMPO PARA OFERTAS";
+  t.innerText=u&&s>0?"TIEMPO CASI AGOTADO":"BUSCANDO CONDUCTORES";
   gi("timerSub").innerText=u&&s>0?"El viaje se cerrara en "+s+"s":"Los conductores pueden enviarte propuestas durante este tiempo";
 }
-async function onTimerExpirado(){
+async function onTimerPubExpirado(){
   if(!currentChatTrip)return;
   const vs=await getDoc(doc(db,"viajes",currentChatTrip));
   if(!vs.exists())return;
   const v=vs.data();
   if(v.estado==="aceptado"||v.estado==="finalizado"||v.estado==="cancelado")return;
+  // cancelar viaje por tiempo
   await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"tiempo_agotado"});
+}
+
+// ---- TIMER OFERTA (cliente decide 180s) ----
+function iniciarTimerOferta(){
+  detenerTimerOferta();timerOfertaSeg=TIMER_OFERTA_DUR;uiTimerOferta(timerOfertaSeg);
+  timerOfertaInterval=setInterval(()=>{timerOfertaSeg--;uiTimerOferta(timerOfertaSeg);if(timerOfertaSeg<=0){detenerTimerOferta();onTimerOfertaExpirado();}},1000);
+}
+function detenerTimerOferta(){
+  if(timerOfertaInterval){clearInterval(timerOfertaInterval);timerOfertaInterval=null;}
+  gi("timerOfertasWrap").classList.remove("urgent-pulse");
+}
+function uiTimerOferta(s){
+  const p=gi("timerOfertasProg"),n=gi("timerOfertasNum"),t=gi("timerOfertasTitle"),w=gi("timerOfertasWrap");
+  p.style.strokeDashoffset=CIRC*(1-s/TIMER_OFERTA_DUR);n.innerText=s;
+  const u=s<=30;
+  p.classList.toggle("urgent",u);n.classList.toggle("urgent",u);t.classList.toggle("urgent",u);w.classList.toggle("urgent-pulse",u&&s>0);
+  t.innerText=u&&s>0?"SE ACABA EL TIEMPO":"TIEMPO PARA DECIDIR";
+  gi("timerOfertasSub").innerText=u&&s>0?"Solo "+s+"s para aceptar o rechazar":"Acepta o rechaza esta oferta antes de que expire";
+}
+async function onTimerOfertaExpirado(){
+  // Tiempo agotado para esta oferta — rechazarla y pasar a siguiente
+  if(!ofertaToastActual||!currentChatTrip)return;
+  const{oferta,viajeId}=ofertaToastActual;
+  await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"}).catch(()=>{});
+  await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId}).catch(()=>{});
+  ocultarOfertaToastActual();
+  mostrandoOferta=false;
+  mostrarSiguienteOferta(viajeId,oferta.monto);
 }
 
 const gi=id=>document.getElementById(id);
 const sv=id=>gi(id)?.value?.trim()||"";
 const sf=id=>gi(id)?.files?.[0]||null;
-const show=(id,v)=>{const e=gi(id);if(e)e.style.display=v?"":"none";};
 function toast(msg,dur=3500){const t=gi("toast");t.innerText=msg;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",dur);}
 function showLoader(v){gi("loader").style.display=v?"block":"none";}
 
-gi("btnLogout").addEventListener("click",async()=>{if(!confirm("Cerrar sesion?"))return;detenerTimer();await signOut(auth);location.reload();});
+gi("btnLogout").addEventListener("click",async()=>{if(!confirm("Cerrar sesion?"))return;detenerTimerPub();detenerTimerOferta();await signOut(auth);location.reload();});
 
 async function toBase64(file,maxPx=400,q=0.65){
   if(!file)return"";
@@ -403,7 +522,14 @@ async function geocode(txt){
   return{lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};
 }
 function distKm(a,b,c,d){const R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
-function mkIcon(color){return L.divIcon({className:"",html:"<div style='background:"+color+";border:3px solid #fff;border-radius:50% 50% 50% 0;width:28px;height:28px;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.5);'></div>",iconSize:[28,28],iconAnchor:[14,28]});}
+
+function mkIcon(color,label=""){
+  return L.divIcon({
+    className:"",
+    html:"<div style='background:"+color+";border:3px solid #fff;border-radius:50% 50% 50% 0;width:28px;height:28px;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.5);'></div>"+(label?"<div style='position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:9px;padding:2px 5px;border-radius:4px;white-space:nowrap;font-family:Rajdhani,sans-serif;font-weight:700;'>"+label+"</div>":""),
+    iconSize:[28,28],iconAnchor:[14,28]
+  });
+}
 
 function setupNav(rol){
   gi("mainNav").style.display="flex";
@@ -425,34 +551,75 @@ function initMap(){
   if(map)return;
   map=L.map("map").setView([13.6929,-89.2182],13);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-  markerOrigen=L.marker([13.6929,-89.2182],{draggable:true,icon:mkIcon("#00e676")}).addTo(map);
-  markerDestino=L.marker([13.7029,-89.2282],{draggable:true,icon:mkIcon("#ff1744")}).addTo(map);
-  markerOrigen.bindTooltip("Origen",{permanent:true,direction:"top",offset:[0,-30]});
-  markerDestino.bindTooltip("Destino",{permanent:true,direction:"top",offset:[0,-30]});
+  markerOrigen=L.marker([13.6929,-89.2182],{draggable:true,icon:mkIcon("#00e676","Origen")}).addTo(map);
+  markerDestino=L.marker([13.7029,-89.2282],{draggable:true,icon:mkIcon("#ff1744","Destino")}).addTo(map);
   markerOrigen.on("dragend",async e=>{const{lat,lng}=e.target.getLatLng();gi("origen").value=await reverseGeocode(lat,lng);});
   markerDestino.on("dragend",async e=>{const{lat,lng}=e.target.getLatLng();gi("destino").value=await reverseGeocode(lat,lng);});
 }
-function initDriverMap(){if(driverMap)return;driverMap=L.map("driverMap").setView([13.6929,-89.2182],13);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(driverMap);}
 
+// ---- MAPA DE CHAT CLIENTE ----
+// naranja=driver, verde=cliente/origen, rojo=destino
+// rutas: driver→cliente (naranja punteado) y origen→destino (verde sólido)
 function initChatMapCli(v){
-  if(!chatMapCli){chatMapCli=L.map("chatMapCliente").setView([13.6929,-89.2182],13);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapCli);}
-  if(v.clienteLat&&!markerCliLive){markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676")}).addTo(chatMapCli).bindTooltip("Partida",{permanent:true,direction:"top",offset:[0,-30]});}
-  if(viajeOrigenCoords&&viajeDestinoCoords)dibujarRuta(chatMapCli,viajeOrigenCoords,viajeDestinoCoords);
+  if(!chatMapCli){
+    chatMapCli=L.map("chatMapCliente").setView([13.6929,-89.2182],13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapCli);
+  }
+  // Punto de origen (verde)
+  if(v.clienteLat&&!markerCliLive){
+    markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676","Tu ubicacion")}).addTo(chatMapCli);
+  }
+  // Punto de destino (rojo)
+  if(viajeDestinoCoords&&!markerDestinoChat){
+    markerDestinoChat=L.marker([viajeDestinoCoords.lat,viajeDestinoCoords.lng],{icon:mkIcon("#ff1744","Destino")}).addTo(chatMapCli);
+  }
+  // Ruta origen→destino (verde solido)
+  if(viajeOrigenCoords&&viajeDestinoCoords){
+    dibujarRutaChat(chatMapCli,viajeOrigenCoords,viajeDestinoCoords,"#00e676","rutaODCli");
+  }
 }
+
+// ---- MAPA DE CHAT DRIVER ----
+// naranja=driver, verde=cliente/origen, rojo=destino
+// rutas: driver→cliente (naranja punteado) y origen→destino (verde sólido)
 function initChatMapDrv(v){
-  if(!chatMapDrv){chatMapDrv=L.map("chatMapDriver").setView([13.6929,-89.2182],13);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapDrv);}
-  if(v.clienteLat&&!markerCliLive){markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676")}).addTo(chatMapDrv).bindTooltip("Cliente",{permanent:true,direction:"top",offset:[0,-30]});}
-  if(miLat){if(markerDrvLive)markerDrvLive.setLatLng([miLat,miLng]);else markerDrvLive=L.marker([miLat,miLng],{icon:mkIcon("#ff6d00")}).addTo(chatMapDrv).bindTooltip("Yo",{permanent:true,direction:"top",offset:[0,-30]});chatMapDrv.setView([miLat,miLng],14);}
-  if(viajeOrigenCoords&&viajeDestinoCoords)dibujarRuta(chatMapDrv,viajeOrigenCoords,viajeDestinoCoords);
+  if(!chatMapDrv){
+    chatMapDrv=L.map("chatMapDriver").setView([13.6929,-89.2182],13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapDrv);
+  }
+  // Punto cliente/origen (verde)
+  if(v.clienteLat&&!markerCliLive){
+    markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676","Cliente")}).addTo(chatMapDrv);
+  }
+  // Punto destino (rojo)
+  if(viajeDestinoCoords&&!markerDestinoChat){
+    markerDestinoChat=L.marker([viajeDestinoCoords.lat,viajeDestinoCoords.lng],{icon:mkIcon("#ff1744","Destino")}).addTo(chatMapDrv);
+  }
+  // Driver (naranja)
+  if(miLat){
+    if(markerDrvLive)markerDrvLive.setLatLng([miLat,miLng]);
+    else markerDrvLive=L.marker([miLat,miLng],{icon:mkIcon("#ff6d00","Tu posicion")}).addTo(chatMapDrv);
+    chatMapDrv.setView([miLat,miLng],14);
+    // Ruta driver→cliente (naranja punteada)
+    if(v.clienteLat)dibujarRutaChat(chatMapDrv,{lat:miLat,lng:miLng},{lat:v.clienteLat,lng:v.clienteLng},"#ff6d00","rutaDrvCli");
+  }
+  // Ruta origen→destino (verde)
+  if(viajeOrigenCoords&&viajeDestinoCoords){
+    dibujarRutaChat(chatMapDrv,viajeOrigenCoords,viajeDestinoCoords,"#00e676","rutaODDrv");
+  }
 }
-async function dibujarRuta(m,o,d){
+
+const _rutasCache={};
+async function dibujarRutaChat(m,o,d,color,key){
   try{
+    const cacheKey=key+"_"+o.lat+"_"+o.lng+"_"+d.lat+"_"+d.lng;
+    if(_rutasCache[cacheKey])return;
+    _rutasCache[cacheKey]=true;
     const r=await fetch("https://router.project-osrm.org/route/v1/driving/"+o.lng+","+o.lat+";"+d.lng+","+d.lat+"?overview=full&geometries=geojson");
     const data=await r.json();if(!data.routes?.length)return;
-    L.marker([o.lat,o.lng],{icon:mkIcon("#00e676")}).addTo(m);
-    L.marker([d.lat,d.lng],{icon:mkIcon("#ff1744")}).addTo(m);
-    const l=L.geoJSON(data.routes[0].geometry,{style:{color:"#ff6d00",weight:4,opacity:.8,dashArray:"8,4"}}).addTo(m);
-    m.fitBounds(l.getBounds(),{padding:[30,30]});
+    const isDash=color==="#ff6d00";
+    L.geoJSON(data.routes[0].geometry,{style:{color,weight:4,opacity:.85,dashArray:isDash?"10,6":"none"}}).addTo(m);
+    m.fitBounds(L.geoJSON(data.routes[0].geometry).getBounds(),{padding:[40,40]});
   }catch(e){console.warn("Ruta:",e);}
 }
 
@@ -461,16 +628,25 @@ function iniciarRastreoDriver(){
   navigator.geolocation.watchPosition(async pos=>{
     miLat=pos.coords.latitude;miLng=pos.coords.longitude;
     if(currentChatTrip)await updateDoc(doc(db,"viajes",currentChatTrip),{driverLat:miLat,driverLng:miLng}).catch(()=>{});
-    if(driverMap){if(markerDrvLive)markerDrvLive.setLatLng([miLat,miLng]);else markerDrvLive=L.marker([miLat,miLng],{icon:mkIcon("#ff6d00")}).addTo(driverMap).bindTooltip("Mi posicion",{permanent:true,direction:"top",offset:[0,-30]});driverMap.setView([miLat,miLng],14);}
-    if(chatMapDrv&&currentChatTrip&&markerDrvLive)markerDrvLive.setLatLng([miLat,miLng]);
+    if(chatMapDrv&&markerDrvLive){
+      markerDrvLive.setLatLng([miLat,miLng]);
+      chatMapDrv.setView([miLat,miLng],14);
+    }
   },e=>console.warn("GPS",e),{enableHighAccuracy:true,maximumAge:4000});
 }
 
 function escucharPosDrv(id){
   onSnapshot(doc(db,"viajes",id),snap=>{
     const v=snap.data();if(!v||!v.driverLat)return;
-    if(chatMapCli){if(markerDrvLive)markerDrvLive.setLatLng([v.driverLat,v.driverLng]);else markerDrvLive=L.marker([v.driverLat,v.driverLng],{icon:mkIcon("#ff6d00")}).addTo(chatMapCli).bindTooltip("Conductor",{permanent:true,direction:"top",offset:[0,-30]});}
+    if(chatMapCli){
+      if(markerDrvLive)markerDrvLive.setLatLng([v.driverLat,v.driverLng]);
+      else markerDrvLive=L.marker([v.driverLat,v.driverLng],{icon:mkIcon("#ff6d00","Conductor")}).addTo(chatMapCli);
+    }
     if(v.clienteLat){const km=distKm(v.driverLat,v.driverLng,v.clienteLat,v.clienteLng);gi("cliDistKm").innerText=km.toFixed(1);gi("cliEta").innerText=Math.ceil(km/0.5);}
+    // actualizar ruta driver→cliente en tiempo real
+    if(chatMapCli&&v.clienteLat){
+      dibujarRutaChat(chatMapCli,{lat:v.driverLat,lng:v.driverLng},{lat:v.clienteLat,lng:v.clienteLng},"#ff6d00","rutaDrvCliRT_"+Date.now());
+    }
   });
 }
 
@@ -498,8 +674,8 @@ gi("authBtn").addEventListener("click",async()=>{
       fotoPerfil:await toBase64(sf("fotoPerfil")),
       licencia:await toBase64(sf("licencia")),penales:await toBase64(sf("penales")),
       solvencia:await toBase64(sf("solvencia")),fotoPlaca:await toBase64(sf("fotoPlaca")),
-      fotoCarro1:await toBase64(sf("fotoCarro1")),fotoCarro2:await toBase64(sf("fotoCarro2")),
-      fotoCarro3:await toBase64(sf("fotoCarro3")),estado:"activo",timestamp:new Date().toISOString()
+      fotoCarro1:await toBase64(sf("fotoCarro1")),fotoCarro2:await toBase64(sf("fotoCarro2")),fotoCarro3:await toBase64(sf("fotoCarro3")),
+      estado:"activo",timestamp:new Date().toISOString()
     });
     toast("Cuenta creada correctamente");
   }catch(e){console.error(e);alert(e.message);}
@@ -527,7 +703,7 @@ onAuthStateChanged(auth,async user=>{
     escucharEstadoViajesCliente();
   }else if(miRol==="driver"){
     gi("driverSection").classList.add("active");
-    initDriverMap();iniciarRastreoDriver();
+    iniciarRastreoDriver();
     escucharViajesDisponibles();escucharMensajesGenerales();cargarGananciasDriver();
   }else if(miRol==="admin"){
     gi("adminSection").classList.add("active");
@@ -535,7 +711,6 @@ onAuthStateChanged(auth,async user=>{
   }
 });
 
-// GPS CLIENTE
 gi("btnGPS").addEventListener("click",()=>{
   navigator.geolocation.getCurrentPosition(async pos=>{
     miLat=pos.coords.latitude;miLng=pos.coords.longitude;
@@ -567,8 +742,11 @@ gi("btnPublicar").addEventListener("click",async()=>{
   const oferta=parseFloat(gi("ofertaCliente").value);
   if(isNaN(oferta)){alert("Ingresa tu oferta");return;}
   if(!sv("origen")||!sv("destino")){alert("Completa origen y destino");return;}
-  currentChatTrip=null;chatClienteAbierto=false;ofertasMostradas.clear();ofertaToastActual=null;
-  ocultarOfertaToast();show("chatCardCliente",false);
+  // reset
+  currentChatTrip=null;chatClienteAbierto=false;
+  ofertasMostradas.clear();ofertasQueue.length=0;ofertaToastActual=null;mostrandoOferta=false;
+  ocultarOfertaToastActual();
+  if(gi("chatCardCliente"))gi("chatCardCliente").style.display="none";
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
   const viaje=await addDoc(collection(db,"viajes"),{
     clienteId:miUid,clienteNombre:miNombre,clienteFoto:miFoto,
@@ -583,16 +761,15 @@ gi("btnPublicar").addEventListener("click",async()=>{
   currentChatTrip=viaje.id;
   setBadge("buscando");
   gi("btnCancelarViajePublicado").style.display="";
-  iniciarTimer();
-  // FIX 1: listener de ofertas arranca inmediatamente al publicar
+  iniciarTimerPub();
   escucharOfertasSubcoleccion(viaje.id,oferta);
-  toast("Viaje publicado, esperando conductores... (200s)");
+  toast("Viaje publicado! Esperando conductores... (200s)");
 });
 
 gi("btnCancelarViajePublicado").addEventListener("click",async()=>{
   if(!currentChatTrip){toast("No hay viaje publicado activo");return;}
   if(!confirm("Cancelar el viaje publicado?"))return;
-  detenerTimer();
+  detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
   await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString()});
 });
 
@@ -604,7 +781,7 @@ function setBadge(estado){
   else if(estado==="aceptado"){b.classList.add("estado-aceptado");b.innerText="Viaje confirmado! Conductor en camino";}
 }
 
-// VIAJES DISPONIBLES DRIVER
+// ---- VIAJES DISPONIBLES DRIVER ----
 function escucharViajesDisponibles(){
   onSnapshot(collection(db,"viajes"),snap=>{
     const cont=gi("viajes");cont.innerHTML="";
@@ -616,8 +793,8 @@ function escucharViajesDisponibles(){
       if(v.estado!=="buscando"&&v.estado!=="contraoferta")return;
       hay=true;
       const pub=v.timestamp?new Date(v.timestamp):null;
-      const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_DUR;
-      const secsR=Math.max(0,TIMER_DUR-secsT);
+      const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_PUB_DUR;
+      const secsR=Math.max(0,TIMER_PUB_DUR-secsT);
       const tc=secsR<=30?"var(--red)":"var(--orange)";
       const div=document.createElement("div");div.className="trip-card";
       div.innerHTML="<div style='display:flex;gap:10px;align-items:center;margin-bottom:8px;'><img src='"+v.clienteFoto+"' style='width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--g);'><div><div style='font-weight:700;font-size:15px;'>"+v.clienteNombre+"</div><div style='font-size:12px;color:var(--sub);'>"+v.origen+"</div><div style='font-size:12px;color:var(--sub);'>"+v.destino+"</div></div></div>"
@@ -632,17 +809,18 @@ function escucharViajesDisponibles(){
   });
 }
 
-// MODAL DRIVER
+// ---- MODAL DRIVER — solo contra oferta ----
 async function abrirModalDriver(id){
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
   viajeActivoId=id;contadorOfertas=0;
   const snap=await getDoc(doc(db,"viajes",id));
   const v=snap.data();
   const pub=v.timestamp?new Date(v.timestamp):null;
-  const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_DUR;
-  if(secsT>=TIMER_DUR){toast("Este viaje ya expiro.");return;}
+  const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_PUB_DUR;
+  if(secsT>=TIMER_PUB_DUR){toast("Este viaje ya expiro.");return;}
   limpiarEstadoModal();
-  gi("driverOfertaContenido").innerHTML="<div style='text-align:center;margin-bottom:12px;'><img src='"+v.clienteFoto+"' style='width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--g);'><div style='font-weight:700;font-size:17px;margin-top:6px;'>"+v.clienteNombre+"</div></div>"
+  gi("driverOfertaContenido").innerHTML=
+    "<div style='text-align:center;margin-bottom:12px;'><img src='"+v.clienteFoto+"' style='width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--g);'><div style='font-weight:700;font-size:17px;margin-top:6px;'>"+v.clienteNombre+"</div></div>"
     +"<div style='background:var(--card2);border-radius:10px;padding:10px;margin-bottom:10px;'>"
     +"<div class='stat-row'><span class='stat-label'>Origen</span><span style='font-size:13px;'>"+v.origen+"</span></div>"
     +"<div class='stat-row'><span class='stat-label'>Destino</span><span style='font-size:13px;'>"+v.destino+"</span></div>"
@@ -653,10 +831,9 @@ async function abrirModalDriver(id){
     +"</div>"+(v.notas?"<div style='font-size:12px;background:var(--card2);padding:8px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"");
   gi("modalDriver").classList.add("open");
   escucharChatPrivadoModal(id);
-  // FIX 2+3: listener completo del viaje en modal
   unsubViajeModal=onSnapshot(doc(db,"viajes",id),s=>{
     const vv=s.data();if(!vv)return;
-    // Aceptado por este driver (cliente acepto mi oferta o yo acepte precio)
+    // Mi oferta fue aceptada
     if(vv.estado==="aceptado"&&vv.driverId===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box aceptada";eb.style.display="block";eb.innerText="El cliente acepto tu oferta! Preparando viaje...";
       setTimeout(()=>{
@@ -666,19 +843,19 @@ async function abrirModalDriver(id){
         }
       },1500);return;
     }
-    // Aceptado por otro driver
+    // Tomado por otro driver
     if(vv.estado==="aceptado"&&vv.driverId&&vv.driverId!==miUid){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
       toast("Este viaje fue tomado por otro conductor.");
       if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}return;
     }
-    // FIX 2: cancelado (incluye tiempo_agotado)
+    // Cancelado o tiempo agotado
     if(vv.estado==="cancelado"){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
-      toast(vv.motivoCancelacion==="tiempo_agotado"?"El tiempo de este viaje expiro. El cliente debera republicarlo.":"El cliente cancelo este viaje.",5000);
+      toast(vv.motivoCancelacion==="tiempo_agotado"?"El tiempo de este viaje expiro.":"El cliente cancelo este viaje.",5000);
       if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}return;
     }
-    // FIX 3: cliente rechazo mi oferta
+    // Mi oferta fue rechazada
     if(vv.ultimaOfertaRechazadaDriver===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box rechazada";eb.style.display="block";
       eb.innerText="El cliente rechazo tu oferta. Puedes enviar otra ("+contadorOfertas+"/3).";
@@ -687,22 +864,12 @@ async function abrirModalDriver(id){
 }
 
 function limpiarEstadoModal(){
-  const eb=gi("modalDriverEstado");eb.className="oferta-estado-box";eb.style.display="none";eb.innerText="";
-  gi("contraOfertaDriver").value="";contadorOfertas=0;viajeActivoId="";
+  const eb=gi("modalDriverEstado");if(eb){eb.className="oferta-estado-box";eb.style.display="none";eb.innerText="";}
+  if(gi("contraOfertaDriver"))gi("contraOfertaDriver").value="";
+  contadorOfertas=0;viajeActivoId="";
 }
 
-gi("btnAceptarViaje").addEventListener("click",async()=>{
-  if(!viajeActivoId)return;
-  const vs=await getDoc(doc(db,"viajes",viajeActivoId));const v=vs.data();
-  if(v.estado!=="buscando"&&v.estado!=="contraoferta"){toast("Este viaje ya no esta disponible");gi("modalDriver").classList.remove("open");limpiarEstadoModal();return;}
-  const us=await getDoc(doc(db,"usuarios",miUid));const drv=us.data();
-  await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"aceptado",driverId:miUid,driverNombre:drv.nombre,driverFoto:drv.fotoPerfil||"",placa:drv.placa||"",marca:drv.marca||"",modelo:drv.modelo||""});
-  gi("modalDriver").classList.remove("open");
-  if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
-  const tmpId=viajeActivoId;limpiarEstadoModal();
-  currentChatTrip=tmpId;abrirChatDriver(tmpId);toast("Viaje aceptado! Buena ruta!");
-});
-
+// CONTRA-OFERTA — unico modo de participar
 gi("btnContraOfertar").addEventListener("click",async()=>{
   if(contadorOfertas>=3){toast("Maximo 3 ofertas por viaje");return;}
   const valor=parseFloat(gi("contraOfertaDriver").value);
@@ -717,20 +884,14 @@ gi("btnContraOfertar").addEventListener("click",async()=>{
   await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"contraoferta"});
   gi("contraOfertaDriver").value="";
   const eb=gi("modalDriverEstado");eb.className="oferta-estado-box enviada";eb.style.display="block";
-  eb.innerText="Oferta de $"+valor+" enviada ("+contadorOfertas+"/3) - esperando respuesta...";
-  toast("Oferta $"+valor+" enviada al cliente");
+  eb.innerText="Oferta de $"+valor.toFixed(2)+" enviada ("+contadorOfertas+"/3) - esperando respuesta del cliente...";
+  toast("Oferta $"+valor.toFixed(2)+" enviada al cliente");
 });
 
 gi("btnRechazarViaje").addEventListener("click",async()=>{
-  if(viajeActivoId){
-    const vs=await getDoc(doc(db,"viajes",viajeActivoId));const v=vs.data();
-    if(v&&v.estado==="contraoferta"&&v.driverId===miUid){
-      await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"buscando",driverId:deleteField(),driverNombre:deleteField(),driverFoto:deleteField(),placa:deleteField(),marca:deleteField(),modelo:deleteField()});
-    }
-  }
   gi("modalDriver").classList.remove("open");
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
-  limpiarEstadoModal();toast("Viaje rechazado");
+  limpiarEstadoModal();toast("Cerrado");
 });
 
 function escucharChatPrivadoModal(tripId){
@@ -748,8 +909,7 @@ gi("btnDrvMsgPriv").addEventListener("click",async()=>{
   inp.value="";
 });
 
-// LISTENER PRINCIPAL CLIENTE
-// FIX 1: ya NO inicia ofertas desde aqui - se hace en btnPublicar
+// ---- LISTENER PRINCIPAL CLIENTE ----
 function escucharEstadoViajesCliente(){
   if(unsubEstadoViajes){unsubEstadoViajes();unsubEstadoViajes=null;}
   unsubEstadoViajes=onSnapshot(collection(db,"viajes"),snap=>{
@@ -758,65 +918,95 @@ function escucharEstadoViajesCliente(){
       if(v.clienteId!==miUid||ds.id!==currentChatTrip)return;
       setBadge(v.estado);
       if(v.estado==="aceptado"&&!chatClienteAbierto){
-        chatClienteAbierto=true;detenerTimer();ocultarOfertaToast();
+        chatClienteAbierto=true;detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
         if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
         gi("modalDriver").classList.remove("open");
         abrirChatClienteFinal(ds.id);
       }
       if(v.estado==="finalizado"||v.estado==="cancelado"){
-        detenerTimer();ocultarOfertaToast();cerrarChats();setBadge(null);chatClienteAbierto=false;
-        if(v.estado==="cancelado"&&v.motivoCancelacion==="tiempo_agotado")toast("Tiempo agotado. No se encontro conductor. Vuelve a publicar el viaje.",6000);
+        detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
+        cerrarChats();setBadge(null);chatClienteAbierto=false;
+        if(v.estado==="cancelado"&&v.motivoCancelacion==="tiempo_agotado")
+          toast("Tiempo agotado. No se encontro conductor. Escribe una nueva oferta y republica.",7000);
       }
     });
   });
 }
 
-// FIX 1: listener de ofertas independiente, llamado al publicar
+// ---- COLA DE OFERTAS — se muestran UNA A UNA ----
 function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
   unsubOfertasCol=onSnapshot(query(collection(db,"viajes",viajeId,"ofertas"),orderBy("timestamp","asc")),snap=>{
-    let tot=0;
+    let pendientes=0;
     snap.forEach(ds=>{
       const o={id:ds.id,...ds.data()};
-      if(o.estado==="pendiente")tot++;
-      if(!ofertasMostradas.has(o.id)&&o.estado==="pendiente"){
-        ofertasMostradas.add(o.id);
-        mostrarOfertaToast(o,viajeId,ofertaOriginalValor);
+      if(o.estado==="pendiente"){
+        pendientes++;
+        if(!ofertasMostradas.has(o.id)){
+          ofertasMostradas.add(o.id);
+          ofertasQueue.push({oferta:o,viajeId,ofertaOriginalValor});
+        }
       }
     });
     const cnt=gi("ofertasContador");
-    if(tot>0){cnt.style.display="block";cnt.innerText=tot+" oferta"+(tot>1?"s":"")+" de conductor"+(tot>1?"es":"")+" esperando respuesta";}
-    else cnt.style.display="none";
+    if(pendientes>0){cnt.style.display="block";cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" disponible"+(pendientes>1?"s":"");}
+    else{cnt.style.display="none";}
+    if(!mostrandoOferta&&ofertasQueue.length>0){
+      mostrarSiguienteOferta(viajeId,ofertaOriginalValor);
+    }
   });
 }
 
-function mostrarOfertaToast(o,viajeId,ofOrig){
-  ofertaToastActual={oferta:o,viajeId};
-  gi("otFoto").src=o.driverFoto||"";gi("otNombre").innerText=o.driverNombre;
-  gi("otVehiculo").innerText=o.marca+" "+o.modelo;gi("otPlaca").innerText=o.placa;
-  gi("otMonto").innerText=Number(o.monto).toFixed(2);gi("otOfertaOriginal").innerText=Number(ofOrig).toFixed(2);
+function mostrarSiguienteOferta(viajeId,ofertaOriginalValor){
+  if(ofertasQueue.length===0){mostrandoOferta=false;return;}
+  mostrandoOferta=true;
+  const item=ofertasQueue.shift();
+  const{oferta}=item;
+  ofertaToastActual={oferta,viajeId};
+  gi("otFoto").src=oferta.driverFoto||"";
+  gi("otNombre").innerText=oferta.driverNombre;
+  gi("otVehiculo").innerText=(oferta.marca||"")+" "+(oferta.modelo||"");
+  gi("otPlaca").innerText=oferta.placa||"";
+  gi("otMonto").innerText=Number(oferta.monto).toFixed(2);
+  gi("otOfertaOriginal").innerText=Number(ofertaOriginalValor).toFixed(2);
   gi("ofertaToast").classList.add("visible");
+  iniciarTimerOferta();
 }
-function ocultarOfertaToast(){gi("ofertaToast").classList.remove("visible");ofertaToastActual=null;}
+
+function ocultarOfertaToastActual(){
+  gi("ofertaToast").classList.remove("visible");
+  ofertaToastActual=null;
+  detenerTimerOferta();
+}
 
 gi("btnAceptarOfertaToast").addEventListener("click",async()=>{
   if(!ofertaToastActual||!currentChatTrip)return;
+  detenerTimerOferta();
   const{oferta,viajeId}=ofertaToastActual;
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"aceptada"});
-  await updateDoc(doc(db,"viajes",viajeId),{estado:"aceptado",ofertaActual:oferta.monto,driverId:oferta.driverId,driverNombre:oferta.driverNombre,driverFoto:oferta.driverFoto,placa:oferta.placa,marca:oferta.marca,modelo:oferta.modelo});
-  detenerTimer();ocultarOfertaToast();chatClienteAbierto=true;
+  await updateDoc(doc(db,"viajes",viajeId),{
+    estado:"aceptado",ofertaActual:oferta.monto,
+    driverId:oferta.driverId,driverNombre:oferta.driverNombre,driverFoto:oferta.driverFoto,
+    placa:oferta.placa,marca:oferta.marca,modelo:oferta.modelo
+  });
+  detenerTimerPub();ocultarOfertaToastActual();chatClienteAbierto=true;
+  mostrandoOferta=false;ofertasQueue.length=0;
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
   abrirChatClienteFinal(viajeId);toast("Oferta aceptada! Tu conductor esta en camino.");
 });
 
 gi("btnRechazarOfertaToast").addEventListener("click",async()=>{
   if(!ofertaToastActual||!currentChatTrip)return;
+  detenerTimerOferta();
   const{oferta,viajeId}=ofertaToastActual;
+  const ofertaOrigVal=parseFloat(gi("otOfertaOriginal").innerText)||0;
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"});
-  // FIX 3: notificar al driver que fue rechazado
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId});
-  ocultarOfertaToast();ofertasMostradas.delete(oferta.id);
-  toast("Oferta rechazada. Puedes esperar mas conductores.");setBadge("buscando");
+  ocultarOfertaToastActual();
+  mostrandoOferta=false;
+  toast("Oferta rechazada.");setBadge("buscando");
+  // mostrar siguiente si hay
+  setTimeout(()=>mostrarSiguienteOferta(viajeId,ofertaOrigVal),400);
 });
 
 async function abrirChatClienteFinal(id){
@@ -827,12 +1017,17 @@ async function abrirChatClienteFinal(id){
   if(v.origenLat)viajeOrigenCoords={lat:v.origenLat,lng:v.origenLng};
   if(v.destinoLat)viajeDestinoCoords={lat:v.destinoLat,lng:v.destinoLng};
   if(viajeOrigenCoords&&viajeDestinoCoords)gi("cliDistViaje").innerText=distKm(viajeOrigenCoords.lat,viajeOrigenCoords.lng,viajeDestinoCoords.lat,viajeDestinoCoords.lng).toFixed(1);
-  show("chatCardCliente",true);
+  gi("chatCardCliente").style.display="";
   gi("cliChatFotoCli").src=cli.fotoPerfil||miFoto||"";gi("cliChatNombreCli").innerText=v.clienteNombre||"";
   gi("cliChatFotoDrv").src=v.driverFoto||"";gi("cliChatNombreDrv").innerText=v.driverNombre||"";
   gi("cliChatVehiculo").innerText=(v.marca||"")+" "+(v.modelo||"");gi("cliChatPlaca").innerText=v.placa||"";
-  initChatMapCli(v);escucharPosDrv(id);escucharMensajesChat(id,"chatBox");escucharEstadoFinalViaje(id);
-  setBadge("aceptado");setTimeout(()=>gi("chatCardCliente").scrollIntoView({behavior:"smooth"}),300);
+  // reiniciar mapa chat
+  chatMapCli=null;markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
+  // esperar render
+  setTimeout(()=>{initChatMapCli(v);escucharPosDrv(id);},200);
+  escucharMensajesChat(id,"chatBox");escucharEstadoFinalViaje(id);
+  setBadge("aceptado");
+  setTimeout(()=>gi("chatCardCliente").scrollIntoView({behavior:"smooth"}),400);
 }
 
 async function abrirChatDriver(id){
@@ -842,17 +1037,20 @@ async function abrirChatDriver(id){
   if(v.origenLat)viajeOrigenCoords={lat:v.origenLat,lng:v.origenLng};
   if(v.destinoLat)viajeDestinoCoords={lat:v.destinoLat,lng:v.destinoLng};
   if(viajeOrigenCoords&&viajeDestinoCoords)gi("drvDistViaje").innerText=distKm(viajeOrigenCoords.lat,viajeOrigenCoords.lng,viajeDestinoCoords.lat,viajeDestinoCoords.lng).toFixed(1);
-  show("chatCardDriver",true);
+  gi("chatCardDriver").style.display="";
   gi("drvChatFotoCli").src=cli.fotoPerfil||"";gi("drvChatNombreCli").innerText=v.clienteNombre||"";
   gi("drvChatFotoDrv").src=v.driverFoto||miFoto||"";gi("drvChatNombreDrv").innerText=v.driverNombre||"";
   gi("drvChatVehiculo").innerText=(v.marca||"")+" "+(v.modelo||"");gi("drvChatPlaca").innerText=v.placa||"";
-  initChatMapDrv(v);
+  // reiniciar mapa chat driver
+  chatMapDrv=null;markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
+  setTimeout(()=>{initChatMapDrv(v);},200);
   onSnapshot(doc(db,"viajes",id),snap=>{
     const vv=snap.data();if(!vv)return;
     if(miLat&&vv.clienteLat){const km=distKm(miLat,miLng,vv.clienteLat,vv.clienteLng);gi("drvDistKm").innerText=km.toFixed(1);gi("drvEta").innerText=Math.ceil(km/0.5);}
+    if(chatMapDrv&&markerDrvLive&&miLat)markerDrvLive.setLatLng([miLat,miLng]);
   });
   escucharMensajesChat(id,"driverChatBox");escucharEstadoFinalViaje(id);
-  setTimeout(()=>gi("chatCardDriver").scrollIntoView({behavior:"smooth"}),300);
+  setTimeout(()=>gi("chatCardDriver").scrollIntoView({behavior:"smooth"}),400);
 }
 
 function escucharMensajesChat(tripId,boxId){
@@ -878,10 +1076,10 @@ gi("btnDriverEnviarMensaje").addEventListener("click",async()=>{
 function escucharMensajesGenerales(){
   onSnapshot(query(collection(db,"mensajesGenerales"),orderBy("timestamp","desc"),limit(20)),snap=>{
     const box=gi("mensajesGeneralesDriver");if(!box)return;box.innerHTML="";
-    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg sys";div.innerHTML="Aviso de "+( m.de||"Admin")+": "+m.msg;box.appendChild(div);});
+    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg sys";div.innerHTML="Aviso de "+(m.de||"Admin")+": "+m.msg;box.appendChild(div);});
   });
   onSnapshot(query(collection(db,"notificacionesDrivers"),orderBy("timestamp","desc"),limit(5)),snap=>{
-    snap.forEach(d=>{const m=d.data();if(m.tipo==="asignado"){show("asignadoMsg",true);gi("asignadoMsg").innerText=m.mensaje;setTimeout(()=>show("asignadoMsg",false),8000);}});
+    snap.forEach(d=>{const m=d.data();if(m.tipo==="asignado"){gi("asignadoMsg").style.display="block";gi("asignadoMsg").innerText=m.mensaje;setTimeout(()=>gi("asignadoMsg").style.display="none",8000);}});
   });
 }
 
@@ -941,16 +1139,23 @@ async function cancelarViaje(){
 }
 
 function cerrarChats(){
-  detenerTimer();show("chatCardCliente",false);show("chatCardDriver",false);
-  gi("modalDriver").classList.remove("open");ocultarOfertaToast();
-  currentChatTrip=null;viajeActivoId="";chatClienteAbierto=false;
-  markerDrvLive=null;markerCliLive=null;viajeOrigenCoords=null;viajeDestinoCoords=null;
-  chatMapCli=null;chatMapDrv=null;ofertasMostradas.clear();ofertaToastActual=null;
-  gi("ofertasContador").style.display="none";gi("btnCancelarViajePublicado").style.display="none";
+  detenerTimerPub();detenerTimerOferta();
+  if(gi("chatCardCliente"))gi("chatCardCliente").style.display="none";
+  if(gi("chatCardDriver"))gi("chatCardDriver").style.display="none";
+  gi("modalDriver").classList.remove("open");
+  ocultarOfertaToastActual();
+  currentChatTrip=null;viajeActivoId="";chatClienteAbierto=false;mostrandoOferta=false;
+  markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
+  viajeOrigenCoords=null;viajeDestinoCoords=null;
+  chatMapCli=null;chatMapDrv=null;
+  ofertasMostradas.clear();ofertasQueue.length=0;ofertaToastActual=null;
+  gi("ofertasContador").style.display="none";
+  gi("btnCancelarViajePublicado").style.display="none";
   limpiarEstadoModal();
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
   if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+  Object.keys(_rutasCache).forEach(k=>delete _rutasCache[k]);
 }
 
 function escucharEstadoFinalViaje(viajeId){
