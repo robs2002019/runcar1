@@ -10,9 +10,29 @@ Ejecucion:
     uvicorn runcar_backend:app --reload --port 8000
 
 Variables de entorno requeridas:
-    FIREBASE_CREDENTIALS_JSON  → ruta al archivo serviceAccountKey.json de Firebase
-    SECRET_KEY                 → clave secreta para JWT (cambia esto en produccion)
+    FIREBASE_CREDENTIALS_JSON
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyA0GthjZyqFq4_21dMChiKGJM4_SwESsIM",
+  authDomain: "runcar1-e7224.firebaseapp.com",
+  projectId: "runcar1-e7224",
+  storageBucket: "runcar1-e7224.firebasestorage.app",
+  messagingSenderId: "411696934160",
+  appId: "1:411696934160:web:15ddedab5e288b659f0995",
+  measurementId: "G-8Q5PQ7Y911"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+    SECRET_KEY 
 Endpoints principales:
     POST /auth/register        → Registrar usuario (cliente o driver)
     POST /auth/login           → Login, devuelve JWT
