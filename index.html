@@ -47,7 +47,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .badge-r{background:rgba(255,23,68,.15);color:var(--red);border:1px solid var(--red);}
 .badge-b{background:rgba(41,121,255,.15);color:var(--blue);border:1px solid var(--blue);}
 .badge-y{background:rgba(255,214,0,.15);color:var(--yellow);border:1px solid var(--yellow);}
-/* mapa solo en chat, no en driver section principal */
 #map{height:240px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
 #chatMapCliente,#chatMapDriver{height:300px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
 .chat-box{height:200px;overflow-y:auto;background:#111;padding:10px;border-radius:10px;margin-top:8px;border:1px solid #2a2a2a;}
@@ -78,7 +77,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .modal-box{background:var(--card);border:1px solid #2a2a2a;width:100%;max-width:500px;border-radius:20px;padding:16px;margin:auto;}
 .modal-title{font-family:"Rajdhani",sans-serif;font-size:20px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--g);letter-spacing:1px;}
 
-/* OFERTA TOAST — cliente ve ofertas una a una */
+/* OFERTA TOAST */
 .oferta-toast{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9500;padding:12px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.7));pointer-events:none;}
 .oferta-toast.visible{display:block;}
 .oferta-card{background:var(--card);border:2px solid var(--yellow);border-radius:16px;padding:14px;pointer-events:all;box-shadow:0 -4px 30px rgba(255,214,0,.3);animation:slideUp .3s ease;}
@@ -91,7 +90,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .oferta-card-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
 .oferta-card-btns button{margin-top:0;padding:12px;}
 
-/* TIMER DE OFERTAS (cliente) — 180s */
+/* TIMER OFERTA (150s) */
 .timer-ofertas-wrap{display:none;background:linear-gradient(135deg,rgba(41,121,255,.12),rgba(41,121,255,.05));border:1px solid var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:10px;align-items:center;gap:12px;}
 .timer-ofertas-wrap.visible{display:flex;}
 .timer-ofertas-circle{position:relative;width:56px;height:56px;flex-shrink:0;}
@@ -140,7 +139,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .admin-table td{padding:8px;border-bottom:1px solid #2a2a2a;vertical-align:middle;}
 .admin-table tr:hover td{background:#1e1e1e;}
 #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;padding:10px 22px;border-radius:30px;font-weight:700;font-size:14px;z-index:99999;display:none;font-family:"Rajdhani",sans-serif;letter-spacing:1px;box-shadow:0 4px 20px rgba(0,230,118,.4);}
-/* leyenda mapa */
 .map-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
 .map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);}
 .map-legend-dot{width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex-shrink:0;}
@@ -150,7 +148,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 <body>
 <div id="toast"></div>
 
-<!-- TOAST OFERTA PARA CLIENTE (una a una) -->
+<!-- TOAST OFERTA PARA CLIENTE -->
 <div class="oferta-toast" id="ofertaToast">
   <div class="oferta-card">
     <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:var(--yellow);letter-spacing:2px;margin-bottom:8px;">OFERTA DE CONDUCTOR</div>
@@ -165,14 +163,14 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <div class="oferta-card-monto">$<span id="otMonto">0.00</span>
       <div style="font-size:12px;color:var(--sub);margin-top:2px;">Tu oferta original: $<span id="otOfertaOriginal">0.00</span></div>
     </div>
-    <!-- timer de 180s para aceptar esta oferta -->
+    <!-- FIX 3: Timer reducido a 150s -->
     <div class="timer-ofertas-wrap visible" id="timerOfertasWrap">
       <div class="timer-ofertas-circle">
         <svg width="56" height="56" viewBox="0 0 56 56">
           <circle class="timer-ofertas-bg" cx="28" cy="28" r="22"/>
           <circle class="timer-ofertas-prog" id="timerOfertasProg" cx="28" cy="28" r="22"/>
         </svg>
-        <div class="timer-ofertas-num" id="timerOfertasNum">180</div>
+        <div class="timer-ofertas-num" id="timerOfertasNum">150</div>
       </div>
       <div class="timer-ofertas-info">
         <div class="timer-ofertas-title" id="timerOfertasTitle">TIEMPO PARA DECIDIR</div>
@@ -242,7 +240,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
   <div class="card">
     <div class="card-title">SOLICITAR VIAJE</div>
     <div class="estado-badge" id="estadoBadge"></div>
-    <!-- Timer de publicacion (buscando conductores) -->
     <div class="timer-wrap" id="timerWrap">
       <div class="timer-circle">
         <svg width="54" height="54" viewBox="0 0 54 54">
@@ -275,7 +272,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <button class="btn" id="btnCalcular">CALCULAR RUTA</button>
     <button class="btn" id="btnPublicar" style="margin-top:6px;">PUBLICAR VIAJE</button>
     <button class="btn-red" id="btnCancelarViajePublicado" style="margin-top:6px;display:none;">CANCELAR VIAJE PUBLICADO</button>
-    <!-- Panel debug ofertas -->
     <div id="debugOfertas" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:10px;margin-top:8px;font-size:11px;color:#4caf50;font-family:monospace;max-height:120px;overflow-y:auto;"></div>
   </div>
 
@@ -295,7 +291,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
       <div class="map-info-item"><div class="mi-val" id="cliEta">-</div><div class="mi-label">min llegada</div></div>
       <div class="map-info-item"><div class="mi-val" id="cliDistViaje">-</div><div class="mi-label">KM viaje</div></div>
     </div>
-    <!-- leyenda mapa -->
     <div class="map-legend">
       <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff6d00;"></div>Conductor</div>
       <div class="map-legend-item"><div class="map-legend-dot" style="background:#00e676;"></div>Tu ubicacion / Origen</div>
@@ -318,7 +313,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 <!-- DRIVER -->
 <div id="driverSection" class="section">
   <div class="asignado-msg" id="asignadoMsg">El viaje ha sido asignado a otro conductor.</div>
-  <!-- SIN mapa aqui — solo en chat -->
   <div class="card"><div class="card-title">VIAJES DISPONIBLES</div><div id="viajes"></div></div>
 
   <!-- Chat activo driver -->
@@ -337,7 +331,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
       <div class="map-info-item"><div class="mi-val" id="drvEta">-</div><div class="mi-label">min llegada</div></div>
       <div class="map-info-item"><div class="mi-val" id="drvDistViaje">-</div><div class="mi-label">KM viaje</div></div>
     </div>
-    <!-- leyenda mapa driver -->
     <div class="map-legend">
       <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff6d00;"></div>Tu posicion</div>
       <div class="map-legend-item"><div class="map-legend-dot" style="background:#00e676;"></div>Cliente / Origen</div>
@@ -390,7 +383,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 
 </div><!-- /container -->
 
-<!-- MODAL DRIVER — SOLO CONTRA-OFERTA, sin "aceptar precio del cliente" -->
+<!-- MODAL DRIVER -->
 <div class="modal" id="modalDriver">
   <div class="modal-box">
     <div class="modal-title">SOLICITUD DE VIAJE</div>
@@ -424,20 +417,24 @@ let miUid="",miRol="",miNombre="",miFoto="",isRegister=false;
 let map,chatMapCli,chatMapDrv;
 let markerOrigen,markerDestino,routeLine;
 let markerDrvLive=null,markerCliLive=null,markerDestinoChat=null;
-let routeLineChat=null,routeDrvToCliLine=null;
 let currentChatTrip=null,viajeActivoId="",chatClienteAbierto=false,contadorOfertas=0;
 let miLat=null,miLng=null,viajeOrigenCoords=null,viajeDestinoCoords=null;
 let unsubEstadoViajes=null,unsubChatPrivado=null,unsubViajeModal=null,unsubOfertasCol=null;
 
-// Cola de ofertas pendientes de mostrar al cliente
+// FIX 2: Map para trackear listeners de cards de viajes disponibles (driver)
+// Clave: viajeId → unsub function
+const viajesCardListeners=new Map();
+
+// Cola de ofertas pendientes
 const ofertasQueue=[];
 const ofertasMostradas=new Set();
 let ofertaToastActual=null;
 let mostrandoOferta=false;
 
 // TIMERS
-const TIMER_PUB_DUR=200; // publicacion buscando
-const TIMER_OFERTA_DUR=180; // cliente decide oferta
+const TIMER_PUB_DUR=200;
+// FIX 3: Timer de oferta reducido a 150s
+const TIMER_OFERTA_DUR=150;
 const CIRC=2*Math.PI*22;
 let timerPubInterval=null,timerPubSeg=0;
 let timerOfertaInterval=null,timerOfertaSeg=0;
@@ -466,11 +463,10 @@ async function onTimerPubExpirado(){
   if(!vs.exists())return;
   const v=vs.data();
   if(v.estado==="aceptado"||v.estado==="finalizado"||v.estado==="cancelado")return;
-  // cancelar viaje por tiempo
   await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"tiempo_agotado"});
 }
 
-// ---- TIMER OFERTA (cliente decide 180s) ----
+// ---- TIMER OFERTA (150s) — FIX 3 ----
 function iniciarTimerOferta(){
   detenerTimerOferta();timerOfertaSeg=TIMER_OFERTA_DUR;uiTimerOferta(timerOfertaSeg);
   timerOfertaInterval=setInterval(()=>{timerOfertaSeg--;uiTimerOferta(timerOfertaSeg);if(timerOfertaSeg<=0){detenerTimerOferta();onTimerOfertaExpirado();}},1000);
@@ -487,16 +483,44 @@ function uiTimerOferta(s){
   t.innerText=u&&s>0?"SE ACABA EL TIEMPO":"TIEMPO PARA DECIDIR";
   gi("timerOfertasSub").innerText=u&&s>0?"Solo "+s+"s para aceptar o rechazar":"Acepta o rechaza esta oferta antes de que expire";
 }
+
+// FIX 3: Al expirar timer de oferta — si no hay mas ofertas, cancelar viaje y cerrar todo
 async function onTimerOfertaExpirado(){
   if(!ofertaToastActual||!currentChatTrip)return;
   const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
   const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
+
+  // Rechazar la oferta expirada
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"}).catch(()=>{});
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId}).catch(()=>{});
   ocultarOfertaToastActual();
   mostrandoOferta=false;
-  toast("Tiempo agotado para esta oferta.",3000);
-  mostrarSiguienteOferta(viajeId,origVal);
+
+  // Si hay mas ofertas en cola, mostrar siguiente
+  if(ofertasQueue.length>0){
+    toast("Tiempo agotado para esa oferta. Mostrando siguiente...",3000);
+    mostrarSiguienteOferta(viajeId,origVal);
+    return;
+  }
+
+  // FIX 3: No hay mas ofertas — cancelar el viaje para cerrar ventanas de drivers
+  debugLog("Timer expirado y sin mas ofertas. Cancelando viaje...");
+  toast("No se acepto ninguna oferta. Viaje cancelado. Puedes publicar de nuevo.",6000);
+  try{
+    const vs=await getDoc(doc(db,"viajes",viajeId));
+    if(vs.exists()){
+      const vd=vs.data();
+      if(vd.estado!=="aceptado"&&vd.estado!=="finalizado"&&vd.estado!=="cancelado"){
+        // Esto dispara unsubViajeModal en TODOS los drivers que tengan ese viaje abierto
+        await updateDoc(doc(db,"viajes",viajeId),{
+          estado:"cancelado",
+          fechaCancelacion:new Date().toISOString(),
+          motivoCancelacion:"sin_aceptacion"
+        });
+      }
+    }
+  }catch(e){console.error("Error cancelando viaje por sin aceptacion:",e);}
+  cerrarChats();
 }
 
 const gi=id=>document.getElementById(id);
@@ -560,53 +584,39 @@ function initMap(){
   markerDestino.on("dragend",async e=>{const{lat,lng}=e.target.getLatLng();gi("destino").value=await reverseGeocode(lat,lng);});
 }
 
-// ---- MAPA DE CHAT CLIENTE ----
-// naranja=driver, verde=cliente/origen, rojo=destino
-// rutas: driver→cliente (naranja punteado) y origen→destino (verde sólido)
 function initChatMapCli(v){
   if(!chatMapCli){
     chatMapCli=L.map("chatMapCliente").setView([13.6929,-89.2182],13);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapCli);
   }
-  // Punto de origen (verde)
   if(v.clienteLat&&!markerCliLive){
     markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676","Tu ubicacion")}).addTo(chatMapCli);
   }
-  // Punto de destino (rojo)
   if(viajeDestinoCoords&&!markerDestinoChat){
     markerDestinoChat=L.marker([viajeDestinoCoords.lat,viajeDestinoCoords.lng],{icon:mkIcon("#ff1744","Destino")}).addTo(chatMapCli);
   }
-  // Ruta origen→destino (verde solido)
   if(viajeOrigenCoords&&viajeDestinoCoords){
     dibujarRutaChat(chatMapCli,viajeOrigenCoords,viajeDestinoCoords,"#00e676","rutaODCli");
   }
 }
 
-// ---- MAPA DE CHAT DRIVER ----
-// naranja=driver, verde=cliente/origen, rojo=destino
-// rutas: driver→cliente (naranja punteado) y origen→destino (verde sólido)
 function initChatMapDrv(v){
   if(!chatMapDrv){
     chatMapDrv=L.map("chatMapDriver").setView([13.6929,-89.2182],13);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapDrv);
   }
-  // Punto cliente/origen (verde)
   if(v.clienteLat&&!markerCliLive){
     markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676","Cliente")}).addTo(chatMapDrv);
   }
-  // Punto destino (rojo)
   if(viajeDestinoCoords&&!markerDestinoChat){
     markerDestinoChat=L.marker([viajeDestinoCoords.lat,viajeDestinoCoords.lng],{icon:mkIcon("#ff1744","Destino")}).addTo(chatMapDrv);
   }
-  // Driver (naranja)
   if(miLat){
     if(markerDrvLive)markerDrvLive.setLatLng([miLat,miLng]);
     else markerDrvLive=L.marker([miLat,miLng],{icon:mkIcon("#ff6d00","Tu posicion")}).addTo(chatMapDrv);
     chatMapDrv.setView([miLat,miLng],14);
-    // Ruta driver→cliente (naranja punteada)
     if(v.clienteLat)dibujarRutaChat(chatMapDrv,{lat:miLat,lng:miLng},{lat:v.clienteLat,lng:v.clienteLng},"#ff6d00","rutaDrvCli");
   }
-  // Ruta origen→destino (verde)
   if(viajeOrigenCoords&&viajeDestinoCoords){
     dibujarRutaChat(chatMapDrv,viajeOrigenCoords,viajeDestinoCoords,"#00e676","rutaODDrv");
   }
@@ -646,7 +656,6 @@ function escucharPosDrv(id){
       else markerDrvLive=L.marker([v.driverLat,v.driverLng],{icon:mkIcon("#ff6d00","Conductor")}).addTo(chatMapCli);
     }
     if(v.clienteLat){const km=distKm(v.driverLat,v.driverLng,v.clienteLat,v.clienteLng);gi("cliDistKm").innerText=km.toFixed(1);gi("cliEta").innerText=Math.ceil(km/0.5);}
-    // actualizar ruta driver→cliente en tiempo real
     if(chatMapCli&&v.clienteLat){
       dibujarRutaChat(chatMapCli,{lat:v.driverLat,lng:v.driverLng},{lat:v.clienteLat,lng:v.clienteLng},"#ff6d00","rutaDrvCliRT_"+Date.now());
     }
@@ -765,6 +774,8 @@ gi("btnPublicar").addEventListener("click",async()=>{
   setBadge("buscando");
   gi("btnCancelarViajePublicado").style.display="";
   iniciarTimerPub();
+
+  // FIX 1: Iniciar listener de ofertas INMEDIATAMENTE al publicar
   escucharOfertasSubcoleccion(viaje.id,oferta);
   toast("Viaje publicado! Esperando conductores... (200s)");
 });
@@ -773,7 +784,7 @@ gi("btnCancelarViajePublicado").addEventListener("click",async()=>{
   if(!currentChatTrip){toast("No hay viaje publicado activo");return;}
   if(!confirm("Cancelar el viaje publicado?"))return;
   detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
-  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString()});
+  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"cliente_cancelo"});
 });
 
 function setBadge(estado){
@@ -784,13 +795,21 @@ function setBadge(estado){
   else if(estado==="aceptado"){b.classList.add("estado-aceptado");b.innerText="Viaje confirmado! Conductor en camino";}
 }
 
-// ---- VIAJES DISPONIBLES DRIVER ----
+// ---- FIX 2: VIAJES DISPONIBLES DRIVER con listener por card ----
 function escucharViajesDisponibles(){
+  // Limpiar listeners previos de cards
+  viajesCardListeners.forEach(unsub=>unsub());
+  viajesCardListeners.clear();
+
   onSnapshot(collection(db,"viajes"),snap=>{
-    const cont=gi("viajes");cont.innerHTML="";
+    const cont=gi("viajes");
     const docs=[];snap.forEach(d=>docs.push(d));
     docs.sort((a,b)=>{const ta=a.data().timestamp||"",tb=b.data().timestamp||"";return tb>ta?1:tb<ta?-1:0;});
+
+    // Limpiar y reconstruir solo cards de viajes activos
+    cont.innerHTML="";
     let hay=false;
+
     docs.forEach(ds=>{
       const v=ds.data();
       if(v.estado!=="buscando"&&v.estado!=="contraoferta")return;
@@ -799,20 +818,56 @@ function escucharViajesDisponibles(){
       const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_PUB_DUR;
       const secsR=Math.max(0,TIMER_PUB_DUR-secsT);
       const tc=secsR<=30?"var(--red)":"var(--orange)";
-      const div=document.createElement("div");div.className="trip-card";
+      const div=document.createElement("div");
+      div.className="trip-card";
+      div.id="tripcard_"+ds.id;
       div.innerHTML="<div style='display:flex;gap:10px;align-items:center;margin-bottom:8px;'><img src='"+v.clienteFoto+"' style='width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--g);'><div><div style='font-weight:700;font-size:15px;'>"+v.clienteNombre+"</div><div style='font-size:12px;color:var(--sub);'>"+v.origen+"</div><div style='font-size:12px;color:var(--sub);'>"+v.destino+"</div></div></div>"
-        +"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'><span class='badge badge-g'>$"+v.ofertaActual+"</span><span class='badge badge-b'>"+v.precioApp+"</span><span class='badge badge-y'>"+v.distancia+"</span><span style='background:rgba(255,109,0,.15);border:1px solid "+tc+";color:"+tc+";display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;'>"+secsR+"s</span></div>"
+        +"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'><span class='badge badge-g'>$"+v.ofertaActual+"</span><span class='badge badge-b'>"+v.precioApp+"</span><span class='badge badge-y'>"+v.distancia+"</span><span id='timerbadge_"+ds.id+"' style='background:rgba(255,109,0,.15);border:1px solid "+tc+";color:"+tc+";display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;'>"+secsR+"s</span></div>"
         +"<div style='font-size:12px;color:var(--sub);margin-bottom:8px;'>"+v.personas+" pers &nbsp;"+v.bebes+" bebes &nbsp;"+v.mascotas+" masc &nbsp;"+v.carga+"KG</div>"
         +(v.notas?"<div style='font-size:12px;background:#1a1a1a;padding:6px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"")
         +"<button class='btn' style='margin-top:0;'"+(secsR<=0?" disabled":"")+">"+(secsR<=0?"EXPIRADO":"VER Y ENVIAR OFERTA")+"</button>";
       if(secsR>0)div.querySelector("button").addEventListener("click",()=>abrirModalDriver(ds.id));
       cont.appendChild(div);
+
+      // FIX 2: Listener por cada viaje disponible — si cambia a cancelado/aceptado, eliminar card
+      if(!viajesCardListeners.has(ds.id)){
+        const unsub=onSnapshot(doc(db,"viajes",ds.id),docSnap=>{
+          const vv=docSnap.data();if(!vv)return;
+          const cardEl=gi("tripcard_"+ds.id);
+          if(vv.estado==="cancelado"||vv.estado==="finalizado"||vv.estado==="aceptado"){
+            // FIX 2: Eliminar card inmediatamente
+            if(cardEl)cardEl.remove();
+            // FIX 2: Si el modal de este viaje está abierto, cerrarlo con mensaje
+            if(viajeActivoId===ds.id&&gi("modalDriver").classList.contains("open")){
+              gi("modalDriver").classList.remove("open");
+              limpiarEstadoModal();
+              if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+              if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+              let msg="Este viaje ya no esta disponible.";
+              if(vv.estado==="cancelado"){
+                if(vv.motivoCancelacion==="tiempo_agotado")msg="El tiempo de este viaje expiro.";
+                else if(vv.motivoCancelacion==="cliente_cancelo")msg="El cliente cancelo este viaje.";
+                else if(vv.motivoCancelacion==="sin_aceptacion")msg="El cliente no acepto ninguna oferta.";
+                else msg="El viaje fue cancelado.";
+              }else if(vv.estado==="aceptado"&&vv.driverId!==miUid){
+                msg="Este viaje fue tomado por otro conductor.";
+              }
+              toast(msg,5000);
+            }
+            // Limpiar listener de esta card
+            unsub();
+            viajesCardListeners.delete(ds.id);
+          }
+        });
+        viajesCardListeners.set(ds.id,unsub);
+      }
     });
+
     if(!hay)cont.innerHTML="<div style='text-align:center;color:var(--sub);padding:20px;font-size:13px;'>No hay viajes disponibles</div>";
   });
 }
 
-// ---- MODAL DRIVER — solo contra oferta ----
+// ---- MODAL DRIVER ----
 async function abrirModalDriver(id){
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
   viajeActivoId=id;contadorOfertas=0;
@@ -834,9 +889,11 @@ async function abrirModalDriver(id){
     +"</div>"+(v.notas?"<div style='font-size:12px;background:var(--card2);padding:8px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"");
   gi("modalDriver").classList.add("open");
   escucharChatPrivadoModal(id);
+
+  // FIX 2: unsubViajeModal — cierra modal cuando cambia estado
   unsubViajeModal=onSnapshot(doc(db,"viajes",id),s=>{
     const vv=s.data();if(!vv)return;
-    // Mi oferta fue aceptada
+    // Mi oferta aceptada
     if(vv.estado==="aceptado"&&vv.driverId===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box aceptada";eb.style.display="block";eb.innerText="El cliente acepto tu oferta! Preparando viaje...";
       setTimeout(()=>{
@@ -850,15 +907,23 @@ async function abrirModalDriver(id){
     if(vv.estado==="aceptado"&&vv.driverId&&vv.driverId!==miUid){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
       toast("Este viaje fue tomado por otro conductor.");
-      if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}return;
+      if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+      if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+      return;
     }
-    // Cancelado o tiempo agotado
+    // FIX 2: Cualquier estado de cancelacion — cerrar modal con mensaje apropiado
     if(vv.estado==="cancelado"){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
-      toast(vv.motivoCancelacion==="tiempo_agotado"?"El tiempo de este viaje expiro.":"El cliente cancelo este viaje.",5000);
-      if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}return;
+      let msg="El viaje fue cancelado.";
+      if(vv.motivoCancelacion==="tiempo_agotado")msg="El tiempo de este viaje expiro.";
+      else if(vv.motivoCancelacion==="cliente_cancelo")msg="El cliente cancelo este viaje.";
+      else if(vv.motivoCancelacion==="sin_aceptacion")msg="El cliente no acepto ninguna oferta en el tiempo disponible.";
+      toast(msg,5000);
+      if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+      if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+      return;
     }
-    // Mi oferta fue rechazada
+    // Mi oferta rechazada
     if(vv.ultimaOfertaRechazadaDriver===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box rechazada";eb.style.display="block";
       eb.innerText="El cliente rechazo tu oferta. Puedes enviar otra ("+contadorOfertas+"/3).";
@@ -872,7 +937,6 @@ function limpiarEstadoModal(){
   contadorOfertas=0;viajeActivoId="";
 }
 
-// CONTRA-OFERTA — unico modo de participar
 gi("btnContraOfertar").addEventListener("click",async()=>{
   if(contadorOfertas>=3){toast("Maximo 3 ofertas por viaje");return;}
   const valor=parseFloat(gi("contraOfertaDriver").value);
@@ -884,7 +948,8 @@ gi("btnContraOfertar").addEventListener("click",async()=>{
     placa:drv.placa||"",marca:drv.marca||"",modelo:drv.modelo||"",
     monto:valor,estado:"pendiente",timestamp:new Date().toISOString()
   });
-  await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"contraoferta"});
+  // FIX 1: Actualizar estado del viaje a "contraoferta" para que el cliente sepa
+  await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"contraoferta",ultimaOfertaTs:new Date().toISOString()});
   gi("contraOfertaDriver").value="";
   const eb=gi("modalDriverEstado");eb.className="oferta-estado-box enviada";eb.style.display="block";
   eb.innerText="Oferta de $"+valor.toFixed(2)+" enviada ("+contadorOfertas+"/3) - esperando respuesta del cliente...";
@@ -894,6 +959,7 @@ gi("btnContraOfertar").addEventListener("click",async()=>{
 gi("btnRechazarViaje").addEventListener("click",async()=>{
   gi("modalDriver").classList.remove("open");
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+  if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
   limpiarEstadoModal();toast("Cerrado");
 });
 
@@ -912,14 +978,21 @@ gi("btnDrvMsgPriv").addEventListener("click",async()=>{
   inp.value="";
 });
 
-// ---- LISTENER PRINCIPAL CLIENTE ----
+// ---- FIX 1: LISTENER PRINCIPAL CLIENTE — escucha el documento directo ----
 function escucharEstadoViajesCliente(){
   if(unsubEstadoViajes){unsubEstadoViajes();unsubEstadoViajes=null;}
+  // El listener de estado del viaje activo se activa cuando hay un viaje publicado
+  // Escuchamos la coleccion para detectar cambios en el viaje del cliente
   unsubEstadoViajes=onSnapshot(collection(db,"viajes"),snap=>{
     snap.forEach(ds=>{
       const v=ds.data();
+      // Solo procesar el viaje actual del cliente
       if(v.clienteId!==miUid||ds.id!==currentChatTrip)return;
       setBadge(v.estado);
+      // FIX 1: Detectar cuando hay ofertas (estado=contraoferta) y mostrar badge
+      if(v.estado==="contraoferta"){
+        setBadge("contraoferta");
+      }
       if(v.estado==="aceptado"&&!chatClienteAbierto){
         chatClienteAbierto=true;detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
         if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
@@ -929,15 +1002,18 @@ function escucharEstadoViajesCliente(){
       if(v.estado==="finalizado"||v.estado==="cancelado"){
         detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
         cerrarChats();setBadge(null);chatClienteAbierto=false;
-        if(v.estado==="cancelado"&&v.motivoCancelacion==="tiempo_agotado")
-          toast("Tiempo agotado. No se encontro conductor. Escribe una nueva oferta y republica.",7000);
+        if(v.estado==="cancelado"){
+          if(v.motivoCancelacion==="tiempo_agotado")
+            toast("Tiempo agotado. No se encontro conductor. Puedes publicar de nuevo.",7000);
+          else if(v.motivoCancelacion==="sin_aceptacion")
+            toast("No aceptaste ninguna oferta a tiempo. Puedes publicar de nuevo.",7000);
+        }
       }
     });
   });
 }
 
-// ---- COLA DE OFERTAS — se muestran UNA A UNA ----
-// Guardamos el ofertaOriginalValor en variable de modulo para acceso global
+// ---- FIX 1: LISTENER DE OFERTAS — mejorado para garantizar entrega ----
 let _ofertaOrigGlobal=0;
 
 function debugLog(msg){
@@ -950,56 +1026,73 @@ function debugLog(msg){
 function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
   _ofertaOrigGlobal=ofertaOriginalValor;
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
-  debugLog("Iniciando listener ofertas viaje: "+viajeId.slice(-6));
-  console.log("[RUNCAR] Iniciando listener ofertas para viaje:",viajeId);
-  // Usamos onSnapshot SIN orderBy para evitar problemas de indices en Firestore
-  unsubOfertasCol=onSnapshot(collection(db,"viajes",viajeId,"ofertas"),snap=>{
-    debugLog("Snap recibido: "+snap.size+" docs");
-    console.log("[RUNCAR] Snap ofertas recibido, total docs:",snap.size);
-    // Ordenar por timestamp manualmente
-    const todos=[];
-    snap.forEach(ds=>todos.push({id:ds.id,...ds.data()}));
-    todos.sort((a,b)=>{const ta=a.timestamp||"",tb=b.timestamp||"";return ta>tb?1:ta<tb?-1:0;});
-    let pendientes=0;
-    todos.forEach(o=>{
-      debugLog("Doc: "+o.id.slice(-4)+" | "+o.estado+" | "+o.driverNombre+" | $"+o.monto);
-      console.log("[RUNCAR] Oferta doc:",o.id,"estado:",o.estado,"driver:",o.driverNombre,"monto:",o.monto);
-      if(o.estado==="pendiente"){
-        pendientes++;
-        if(!ofertasMostradas.has(o.id)){
-          debugLog("→ NUEVA oferta encolada de "+o.driverNombre);
-          console.log("[RUNCAR] Oferta NUEVA pendiente, encolando:",o.id);
-          ofertasMostradas.add(o.id);
-          ofertasQueue.push({oferta:o,viajeId,ofertaOriginalValor});
+  debugLog("Iniciando listener ofertas: "+viajeId.slice(-6)+" | oferta base: $"+ofertaOriginalValor);
+  console.log("[RUNCAR] Listener ofertas iniciado para viaje:",viajeId);
+
+  // FIX 1: Usar onSnapshot en la subcoleccion sin orderBy para evitar indice requerido
+  unsubOfertasCol=onSnapshot(
+    collection(db,"viajes",viajeId,"ofertas"),
+    snap=>{
+      debugLog("Snap ofertas recibido: "+snap.size+" docs");
+      console.log("[RUNCAR] Ofertas snap:",snap.size,"docs");
+
+      // Ordenar manualmente por timestamp
+      const todos=[];
+      snap.forEach(ds=>todos.push({id:ds.id,...ds.data()}));
+      todos.sort((a,b)=>{const ta=a.timestamp||"",tb=b.timestamp||"";return ta>tb?1:ta<tb?-1:0;});
+
+      let pendientes=0;
+      todos.forEach(o=>{
+        debugLog("Oferta: "+o.id.slice(-4)+" | estado:"+o.estado+" | driver:"+o.driverNombre+" | $"+o.monto);
+        if(o.estado==="pendiente"){
+          pendientes++;
+          if(!ofertasMostradas.has(o.id)){
+            debugLog("→ ENCOLANDO oferta nueva de "+o.driverNombre+" $"+o.monto);
+            console.log("[RUNCAR] Nueva oferta encolada:",o.id,"driver:",o.driverNombre,"$"+o.monto);
+            ofertasMostradas.add(o.id);
+            ofertasQueue.push({oferta:o,viajeId,ofertaOriginalValor});
+          }
         }
+      });
+
+      const cnt=gi("ofertasContador");
+      if(pendientes>0){
+        cnt.style.display="block";
+        cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" disponible"+(pendientes>1?"s":"");
+        // FIX 1: Cambiar badge cuando hay ofertas
+        if(currentChatTrip===viajeId)setBadge("contraoferta");
+      }else{cnt.style.display="none";}
+
+      debugLog("Pendientes:"+pendientes+" | Cola:"+ofertasQueue.length+" | Mostrando:"+mostrandoOferta);
+      // FIX 1: Mostrar siguiente oferta si no se está mostrando ninguna
+      if(!mostrandoOferta&&ofertasQueue.length>0&&!chatClienteAbierto){
+        mostrarSiguienteOferta(viajeId,ofertaOriginalValor);
       }
-    });
-    const cnt=gi("ofertasContador");
-    if(pendientes>0){
-      cnt.style.display="block";
-      cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" en espera";
-    }else{cnt.style.display="none";}
-    debugLog("Pendientes:"+pendientes+" Cola:"+ofertasQueue.length+" Mostrando:"+mostrandoOferta);
-    console.log("[RUNCAR] Pendientes:",pendientes,"cola:",ofertasQueue.length,"mostrando:",mostrandoOferta);
-    if(!mostrandoOferta&&ofertasQueue.length>0){
-      mostrarSiguienteOferta(viajeId,ofertaOriginalValor);
+    },
+    err=>{
+      debugLog("ERROR listener: "+err.code+" - "+err.message);
+      console.error("[RUNCAR] ERROR listener ofertas:",err);
+      // FIX 1: Reintentar listener en caso de error de permisos temporal
+      if(err.code==="permission-denied"||err.code==="unavailable"){
+        debugLog("Reintentando listener en 3s...");
+        setTimeout(()=>{
+          if(currentChatTrip===viajeId&&!chatClienteAbierto){
+            escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor);
+          }
+        },3000);
+      }
     }
-  },err=>{
-    debugLog("ERROR: "+err.code+" - "+err.message);
-    console.error("[RUNCAR] ERROR listener ofertas:",err.code,err.message);
-    toast("Error escuchando ofertas: "+err.message,6000);
-  });
+  );
 }
 
 function mostrarSiguienteOferta(viajeId,ofertaOriginalValor){
   if(ofertasQueue.length===0){mostrandoOferta=false;return;}
-  // Si el viaje ya fue aceptado o finalizado, no mostrar
   if(chatClienteAbierto){mostrandoOferta=false;return;}
   mostrandoOferta=true;
   const item=ofertasQueue.shift();
   const{oferta}=item;
   debugLog("Mostrando toast: "+oferta.driverNombre+" $"+oferta.monto);
-  console.log("[RUNCAR] Mostrando oferta toast:",oferta.id,"driver:",oferta.driverNombre,"$"+oferta.monto);
+  console.log("[RUNCAR] Mostrando oferta:",oferta.id,oferta.driverNombre,"$"+oferta.monto);
   ofertaToastActual={oferta,viajeId,ofertaOriginalValor:ofertaOriginalValor||_ofertaOrigGlobal};
   gi("otFoto").src=oferta.driverFoto||"";
   gi("otNombre").innerText=oferta.driverNombre||"Conductor";
@@ -1040,8 +1133,7 @@ gi("btnRechazarOfertaToast").addEventListener("click",async()=>{
   const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"});
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId});
-  ocultarOfertaToastActual();
-  mostrandoOferta=false;
+  ocultarOfertaToastActual();mostrandoOferta=false;
   toast("Oferta rechazada.");setBadge("buscando");
   setTimeout(()=>mostrarSiguienteOferta(viajeId,origVal),400);
 });
@@ -1058,9 +1150,7 @@ async function abrirChatClienteFinal(id){
   gi("cliChatFotoCli").src=cli.fotoPerfil||miFoto||"";gi("cliChatNombreCli").innerText=v.clienteNombre||"";
   gi("cliChatFotoDrv").src=v.driverFoto||"";gi("cliChatNombreDrv").innerText=v.driverNombre||"";
   gi("cliChatVehiculo").innerText=(v.marca||"")+" "+(v.modelo||"");gi("cliChatPlaca").innerText=v.placa||"";
-  // reiniciar mapa chat
   chatMapCli=null;markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
-  // esperar render
   setTimeout(()=>{initChatMapCli(v);escucharPosDrv(id);},200);
   escucharMensajesChat(id,"chatBox");escucharEstadoFinalViaje(id);
   setBadge("aceptado");
@@ -1078,7 +1168,6 @@ async function abrirChatDriver(id){
   gi("drvChatFotoCli").src=cli.fotoPerfil||"";gi("drvChatNombreCli").innerText=v.clienteNombre||"";
   gi("drvChatFotoDrv").src=v.driverFoto||miFoto||"";gi("drvChatNombreDrv").innerText=v.driverNombre||"";
   gi("drvChatVehiculo").innerText=(v.marca||"")+" "+(v.modelo||"");gi("drvChatPlaca").innerText=v.placa||"";
-  // reiniciar mapa chat driver
   chatMapDrv=null;markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
   setTimeout(()=>{initChatMapDrv(v);},200);
   onSnapshot(doc(db,"viajes",id),snap=>{
@@ -1170,7 +1259,7 @@ async function finalizarViaje(){
 }
 async function cancelarViaje(){
   if(!currentChatTrip)return;
-  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString()});
+  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"usuario_cancelo"});
   await addDoc(collection(db,"viajes",currentChatTrip,"mensajes"),{uid:"sistema",nombre:"Sistema",foto:"",msg:"El viaje fue cancelado.",timestamp:new Date().toISOString()});
   toast("Viaje cancelado");cerrarChats();
 }
@@ -1213,4 +1302,3 @@ gi("btnCancelarDriver").addEventListener("click",async()=>{if(!confirm("Cancelar
 </script>
 </body>
 </html>
-
