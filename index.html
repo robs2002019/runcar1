@@ -142,6 +142,8 @@ button:hover{opacity:.88;transform:translateY(-1px);}
 .map-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
 .map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);}
 .map-legend-dot{width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex-shrink:0;}
+/* Boton publicar desactivado */
+#btnPublicar:disabled{opacity:.45;cursor:not-allowed;transform:none;}
 @media(max-width:400px){.nav-tab{padding:5px 8px;font-size:11px;}.logo{font-size:16px;}.btn-logout{font-size:10px;padding:5px 8px;}}
 </style>
 </head>
@@ -163,7 +165,6 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <div class="oferta-card-monto">$<span id="otMonto">0.00</span>
       <div style="font-size:12px;color:var(--sub);margin-top:2px;">Tu oferta original: $<span id="otOfertaOriginal">0.00</span></div>
     </div>
-    <!-- FIX 3: Timer reducido a 150s -->
     <div class="timer-ofertas-wrap visible" id="timerOfertasWrap">
       <div class="timer-ofertas-circle">
         <svg width="56" height="56" viewBox="0 0 56 56">
@@ -272,6 +273,7 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <button class="btn" id="btnCalcular">CALCULAR RUTA</button>
     <button class="btn" id="btnPublicar" style="margin-top:6px;">PUBLICAR VIAJE</button>
     <button class="btn-red" id="btnCancelarViajePublicado" style="margin-top:6px;display:none;">CANCELAR VIAJE PUBLICADO</button>
+    <!-- DEBUG BOX — visible durante pruebas -->
     <div id="debugOfertas" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:10px;margin-top:8px;font-size:11px;color:#4caf50;font-family:monospace;max-height:120px;overflow-y:auto;"></div>
   </div>
 
@@ -421,8 +423,7 @@ let currentChatTrip=null,viajeActivoId="",chatClienteAbierto=false,contadorOfert
 let miLat=null,miLng=null,viajeOrigenCoords=null,viajeDestinoCoords=null;
 let unsubEstadoViajes=null,unsubChatPrivado=null,unsubViajeModal=null,unsubOfertasCol=null;
 
-// FIX 2: Map para trackear listeners de cards de viajes disponibles (driver)
-// Clave: viajeId → unsub function
+// Map para trackear listeners de cards de viajes disponibles (driver)
 const viajesCardListeners=new Map();
 
 // Cola de ofertas pendientes
@@ -433,11 +434,32 @@ let mostrandoOferta=false;
 
 // TIMERS
 const TIMER_PUB_DUR=200;
-// FIX 3: Timer de oferta reducido a 150s
 const TIMER_OFERTA_DUR=150;
 const CIRC=2*Math.PI*22;
 let timerPubInterval=null,timerPubSeg=0;
 let timerOfertaInterval=null,timerOfertaSeg=0;
+
+// ---- HELPERS ----
+const gi=id=>document.getElementById(id);
+const sv=id=>gi(id)?.value?.trim()||"";
+const sf=id=>gi(id)?.files?.[0]||null;
+function toast(msg,dur=3500){const t=gi("toast");t.innerText=msg;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",dur);}
+function showLoader(v){gi("loader").style.display=v?"block":"none";}
+
+// Helper para habilitar/deshabilitar boton publicar
+function setPublicarHabilitado(habilitado){
+  const btn=gi("btnPublicar");
+  btn.disabled=!habilitado;
+  btn.innerText=habilitado?"PUBLICAR VIAJE":"VIAJE ACTIVO (CANCELA PRIMERO)";
+}
+
+// ---- DEBUG LOG (cliente) ----
+function debugLog(msg){
+  const box=gi("debugOfertas");if(!box)return;
+  box.style.display="block";
+  const d=new Date();const ts=d.getHours()+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+  box.innerHTML+="<div>["+ts+"] "+msg+"</div>";box.scrollTop=box.scrollHeight;
+}
 
 // ---- TIMER PUBLICACION ----
 function iniciarTimerPub(){
@@ -466,7 +488,7 @@ async function onTimerPubExpirado(){
   await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"tiempo_agotado"});
 }
 
-// ---- TIMER OFERTA (150s) — FIX 3 ----
+// ---- TIMER OFERTA (150s) ----
 function iniciarTimerOferta(){
   detenerTimerOferta();timerOfertaSeg=TIMER_OFERTA_DUR;uiTimerOferta(timerOfertaSeg);
   timerOfertaInterval=setInterval(()=>{timerOfertaSeg--;uiTimerOferta(timerOfertaSeg);if(timerOfertaSeg<=0){detenerTimerOferta();onTimerOfertaExpirado();}},1000);
@@ -484,26 +506,19 @@ function uiTimerOferta(s){
   gi("timerOfertasSub").innerText=u&&s>0?"Solo "+s+"s para aceptar o rechazar":"Acepta o rechaza esta oferta antes de que expire";
 }
 
-// FIX 3: Al expirar timer de oferta — si no hay mas ofertas, cancelar viaje y cerrar todo
 async function onTimerOfertaExpirado(){
   if(!ofertaToastActual||!currentChatTrip)return;
   const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
   const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
-
-  // Rechazar la oferta expirada
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"}).catch(()=>{});
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId}).catch(()=>{});
   ocultarOfertaToastActual();
   mostrandoOferta=false;
-
-  // Si hay mas ofertas en cola, mostrar siguiente
   if(ofertasQueue.length>0){
     toast("Tiempo agotado para esa oferta. Mostrando siguiente...",3000);
     mostrarSiguienteOferta(viajeId,origVal);
     return;
   }
-
-  // FIX 3: No hay mas ofertas — cancelar el viaje para cerrar ventanas de drivers
   debugLog("Timer expirado y sin mas ofertas. Cancelando viaje...");
   toast("No se acepto ninguna oferta. Viaje cancelado. Puedes publicar de nuevo.",6000);
   try{
@@ -511,23 +526,12 @@ async function onTimerOfertaExpirado(){
     if(vs.exists()){
       const vd=vs.data();
       if(vd.estado!=="aceptado"&&vd.estado!=="finalizado"&&vd.estado!=="cancelado"){
-        // Esto dispara unsubViajeModal en TODOS los drivers que tengan ese viaje abierto
-        await updateDoc(doc(db,"viajes",viajeId),{
-          estado:"cancelado",
-          fechaCancelacion:new Date().toISOString(),
-          motivoCancelacion:"sin_aceptacion"
-        });
+        await updateDoc(doc(db,"viajes",viajeId),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"sin_aceptacion"});
       }
     }
-  }catch(e){console.error("Error cancelando viaje por sin aceptacion:",e);}
+  }catch(e){console.error("Error cancelando viaje:",e);}
   cerrarChats();
 }
-
-const gi=id=>document.getElementById(id);
-const sv=id=>gi(id)?.value?.trim()||"";
-const sf=id=>gi(id)?.files?.[0]||null;
-function toast(msg,dur=3500){const t=gi("toast");t.innerText=msg;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",dur);}
-function showLoader(v){gi("loader").style.display=v?"block":"none";}
 
 gi("btnLogout").addEventListener("click",async()=>{if(!confirm("Cerrar sesion?"))return;detenerTimerPub();detenerTimerOferta();await signOut(auth);location.reload();});
 
@@ -750,16 +754,25 @@ gi("btnCalcular").addEventListener("click",async()=>{
   }catch(e){console.error(e);alert("Error calculando ruta");}
 });
 
+// ---- PUBLICAR VIAJE — con bloqueo de duplicados ----
 gi("btnPublicar").addEventListener("click",async()=>{
+  // NUEVO: Bloquear publicacion si ya hay viaje activo
+  if(currentChatTrip){
+    toast("Ya tienes un viaje publicado activo. Cancelalo primero para publicar uno nuevo.",5000);
+    return;
+  }
+
   const oferta=parseFloat(gi("ofertaCliente").value);
   if(isNaN(oferta)){alert("Ingresa tu oferta");return;}
   if(!sv("origen")||!sv("destino")){alert("Completa origen y destino");return;}
-  // reset
-  currentChatTrip=null;chatClienteAbierto=false;
+
+  // reset estado
+  chatClienteAbierto=false;
   ofertasMostradas.clear();ofertasQueue.length=0;ofertaToastActual=null;mostrandoOferta=false;
   ocultarOfertaToastActual();
   if(gi("chatCardCliente"))gi("chatCardCliente").style.display="none";
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+
   const viaje=await addDoc(collection(db,"viajes"),{
     clienteId:miUid,clienteNombre:miNombre,clienteFoto:miFoto,
     clienteLat:miLat||null,clienteLng:miLng||null,
@@ -770,12 +783,18 @@ gi("btnPublicar").addEventListener("click",async()=>{
     notas:sv("notas"),distancia:gi("distancia").innerText,tiempo:gi("tiempo").innerText,precioApp:gi("precio").innerText,
     ofertaOriginal:oferta,ofertaActual:oferta,estado:"buscando",timestamp:new Date().toISOString()
   });
+
   currentChatTrip=viaje.id;
+  console.log("[CLIENTE] Viaje publicado con ID:",viaje.id,"| oferta: $"+oferta);
+  debugLog("Viaje publicado: "+viaje.id.slice(-6)+" | $"+oferta);
+
   setBadge("buscando");
+  // NUEVO: Deshabilitar boton publicar mientras haya viaje activo
+  setPublicarHabilitado(false);
   gi("btnCancelarViajePublicado").style.display="";
   iniciarTimerPub();
 
-  // FIX 1: Iniciar listener de ofertas INMEDIATAMENTE al publicar
+  // Iniciar listener de ofertas inmediatamente
   escucharOfertasSubcoleccion(viaje.id,oferta);
   toast("Viaje publicado! Esperando conductores... (200s)");
 });
@@ -795,9 +814,8 @@ function setBadge(estado){
   else if(estado==="aceptado"){b.classList.add("estado-aceptado");b.innerText="Viaje confirmado! Conductor en camino";}
 }
 
-// ---- FIX 2: VIAJES DISPONIBLES DRIVER con listener por card ----
+// ---- VIAJES DISPONIBLES DRIVER con listener por card ----
 function escucharViajesDisponibles(){
-  // Limpiar listeners previos de cards
   viajesCardListeners.forEach(unsub=>unsub());
   viajesCardListeners.clear();
 
@@ -806,7 +824,6 @@ function escucharViajesDisponibles(){
     const docs=[];snap.forEach(d=>docs.push(d));
     docs.sort((a,b)=>{const ta=a.data().timestamp||"",tb=b.data().timestamp||"";return tb>ta?1:tb<ta?-1:0;});
 
-    // Limpiar y reconstruir solo cards de viajes activos
     cont.innerHTML="";
     let hay=false;
 
@@ -829,15 +846,13 @@ function escucharViajesDisponibles(){
       if(secsR>0)div.querySelector("button").addEventListener("click",()=>abrirModalDriver(ds.id));
       cont.appendChild(div);
 
-      // FIX 2: Listener por cada viaje disponible — si cambia a cancelado/aceptado, eliminar card
+      // Listener por cada viaje — eliminar card si cambia a cancelado/aceptado
       if(!viajesCardListeners.has(ds.id)){
         const unsub=onSnapshot(doc(db,"viajes",ds.id),docSnap=>{
           const vv=docSnap.data();if(!vv)return;
           const cardEl=gi("tripcard_"+ds.id);
           if(vv.estado==="cancelado"||vv.estado==="finalizado"||vv.estado==="aceptado"){
-            // FIX 2: Eliminar card inmediatamente
             if(cardEl)cardEl.remove();
-            // FIX 2: Si el modal de este viaje está abierto, cerrarlo con mensaje
             if(viajeActivoId===ds.id&&gi("modalDriver").classList.contains("open")){
               gi("modalDriver").classList.remove("open");
               limpiarEstadoModal();
@@ -854,7 +869,6 @@ function escucharViajesDisponibles(){
               }
               toast(msg,5000);
             }
-            // Limpiar listener de esta card
             unsub();
             viajesCardListeners.delete(ds.id);
           }
@@ -887,13 +901,15 @@ async function abrirModalDriver(id){
     +"<div class='stat-row'><span class='stat-label'>Precio cliente</span><span class='stat-val' style='color:var(--yellow);'>$"+v.ofertaActual+"</span></div>"
     +"<div class='stat-row'><span class='stat-label'>Pasajeros</span><span style='font-size:13px;'>"+v.personas+" pers &nbsp;"+v.bebes+" bebes &nbsp;"+v.mascotas+" masc &nbsp;"+v.carga+"KG</span></div>"
     +"</div>"+(v.notas?"<div style='font-size:12px;background:var(--card2);padding:8px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"");
+
+  // NUEVO: Log del ID del viaje que el driver va a ofertar
+  console.log("[DRIVER] Modal abierto para viaje:",id,"| oferta cliente: $"+v.ofertaActual);
+
   gi("modalDriver").classList.add("open");
   escucharChatPrivadoModal(id);
 
-  // FIX 2: unsubViajeModal — cierra modal cuando cambia estado
   unsubViajeModal=onSnapshot(doc(db,"viajes",id),s=>{
     const vv=s.data();if(!vv)return;
-    // Mi oferta aceptada
     if(vv.estado==="aceptado"&&vv.driverId===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box aceptada";eb.style.display="block";eb.innerText="El cliente acepto tu oferta! Preparando viaje...";
       setTimeout(()=>{
@@ -903,7 +919,6 @@ async function abrirModalDriver(id){
         }
       },1500);return;
     }
-    // Tomado por otro driver
     if(vv.estado==="aceptado"&&vv.driverId&&vv.driverId!==miUid){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
       toast("Este viaje fue tomado por otro conductor.");
@@ -911,7 +926,6 @@ async function abrirModalDriver(id){
       if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
       return;
     }
-    // FIX 2: Cualquier estado de cancelacion — cerrar modal con mensaje apropiado
     if(vv.estado==="cancelado"){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
       let msg="El viaje fue cancelado.";
@@ -923,7 +937,6 @@ async function abrirModalDriver(id){
       if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
       return;
     }
-    // Mi oferta rechazada
     if(vv.ultimaOfertaRechazadaDriver===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box rechazada";eb.style.display="block";
       eb.innerText="El cliente rechazo tu oferta. Puedes enviar otra ("+contadorOfertas+"/3).";
@@ -943,12 +956,15 @@ gi("btnContraOfertar").addEventListener("click",async()=>{
   if(isNaN(valor)||valor<=0){alert("Ingresa un precio valido mayor a 0");return;}
   contadorOfertas++;
   const us=await getDoc(doc(db,"usuarios",miUid));const drv=us.data();
+
+  // NUEVO: Log del ID del viaje al que el driver envia la oferta
+  console.log("[DRIVER] Enviando oferta $"+valor+" al viaje:",viajeActivoId,"| driver:",miNombre);
+
   await addDoc(collection(db,"viajes",viajeActivoId,"ofertas"),{
     driverId:miUid,driverNombre:drv.nombre||"",driverFoto:drv.fotoPerfil||"",
     placa:drv.placa||"",marca:drv.marca||"",modelo:drv.modelo||"",
     monto:valor,estado:"pendiente",timestamp:new Date().toISOString()
   });
-  // FIX 1: Actualizar estado del viaje a "contraoferta" para que el cliente sepa
   await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"contraoferta",ultimaOfertaTs:new Date().toISOString()});
   gi("contraOfertaDriver").value="";
   const eb=gi("modalDriverEstado");eb.className="oferta-estado-box enviada";eb.style.display="block";
@@ -978,21 +994,19 @@ gi("btnDrvMsgPriv").addEventListener("click",async()=>{
   inp.value="";
 });
 
-// ---- FIX 1: LISTENER PRINCIPAL CLIENTE — escucha el documento directo ----
+// ---- LISTENER PRINCIPAL CLIENTE ----
 function escucharEstadoViajesCliente(){
   if(unsubEstadoViajes){unsubEstadoViajes();unsubEstadoViajes=null;}
-  // El listener de estado del viaje activo se activa cuando hay un viaje publicado
-  // Escuchamos la coleccion para detectar cambios en el viaje del cliente
   unsubEstadoViajes=onSnapshot(collection(db,"viajes"),snap=>{
     snap.forEach(ds=>{
       const v=ds.data();
-      // Solo procesar el viaje actual del cliente
       if(v.clienteId!==miUid||ds.id!==currentChatTrip)return;
+
+      // NUEVO: Log del snap recibido
+      console.log("[CLIENTE] Snap viaje:",ds.id,"| estado:",v.estado);
+
       setBadge(v.estado);
-      // FIX 1: Detectar cuando hay ofertas (estado=contraoferta) y mostrar badge
-      if(v.estado==="contraoferta"){
-        setBadge("contraoferta");
-      }
+      if(v.estado==="contraoferta"){setBadge("contraoferta");}
       if(v.estado==="aceptado"&&!chatClienteAbierto){
         chatClienteAbierto=true;detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
         if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
@@ -1002,6 +1016,8 @@ function escucharEstadoViajesCliente(){
       if(v.estado==="finalizado"||v.estado==="cancelado"){
         detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
         cerrarChats();setBadge(null);chatClienteAbierto=false;
+        // NUEVO: Rehabilitar boton publicar al finalizar/cancelar
+        setPublicarHabilitado(true);
         if(v.estado==="cancelado"){
           if(v.motivoCancelacion==="tiempo_agotado")
             toast("Tiempo agotado. No se encontro conductor. Puedes publicar de nuevo.",7000);
@@ -1013,30 +1029,21 @@ function escucharEstadoViajesCliente(){
   });
 }
 
-// ---- FIX 1: LISTENER DE OFERTAS — mejorado para garantizar entrega ----
+// ---- LISTENER DE OFERTAS ----
 let _ofertaOrigGlobal=0;
-
-function debugLog(msg){
-  const box=gi("debugOfertas");if(!box)return;
-  box.style.display="block";
-  const d=new Date();const ts=d.getHours()+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
-  box.innerHTML+="<div>["+ts+"] "+msg+"</div>";box.scrollTop=box.scrollHeight;
-}
 
 function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
   _ofertaOrigGlobal=ofertaOriginalValor;
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
   debugLog("Iniciando listener ofertas: "+viajeId.slice(-6)+" | oferta base: $"+ofertaOriginalValor);
-  console.log("[RUNCAR] Listener ofertas iniciado para viaje:",viajeId);
+  console.log("[CLIENTE] Listener ofertas iniciado para viaje:",viajeId);
 
-  // FIX 1: Usar onSnapshot en la subcoleccion sin orderBy para evitar indice requerido
   unsubOfertasCol=onSnapshot(
     collection(db,"viajes",viajeId,"ofertas"),
     snap=>{
       debugLog("Snap ofertas recibido: "+snap.size+" docs");
-      console.log("[RUNCAR] Ofertas snap:",snap.size,"docs");
+      console.log("[CLIENTE] Ofertas snap para viaje",viajeId,":",snap.size,"docs");
 
-      // Ordenar manualmente por timestamp
       const todos=[];
       snap.forEach(ds=>todos.push({id:ds.id,...ds.data()}));
       todos.sort((a,b)=>{const ta=a.timestamp||"",tb=b.timestamp||"";return ta>tb?1:ta<tb?-1:0;});
@@ -1048,7 +1055,7 @@ function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
           pendientes++;
           if(!ofertasMostradas.has(o.id)){
             debugLog("→ ENCOLANDO oferta nueva de "+o.driverNombre+" $"+o.monto);
-            console.log("[RUNCAR] Nueva oferta encolada:",o.id,"driver:",o.driverNombre,"$"+o.monto);
+            console.log("[CLIENTE] Nueva oferta encolada:",o.id,"driver:",o.driverNombre,"$"+o.monto);
             ofertasMostradas.add(o.id);
             ofertasQueue.push({oferta:o,viajeId,ofertaOriginalValor});
           }
@@ -1059,20 +1066,17 @@ function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
       if(pendientes>0){
         cnt.style.display="block";
         cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" disponible"+(pendientes>1?"s":"");
-        // FIX 1: Cambiar badge cuando hay ofertas
         if(currentChatTrip===viajeId)setBadge("contraoferta");
       }else{cnt.style.display="none";}
 
       debugLog("Pendientes:"+pendientes+" | Cola:"+ofertasQueue.length+" | Mostrando:"+mostrandoOferta);
-      // FIX 1: Mostrar siguiente oferta si no se está mostrando ninguna
       if(!mostrandoOferta&&ofertasQueue.length>0&&!chatClienteAbierto){
         mostrarSiguienteOferta(viajeId,ofertaOriginalValor);
       }
     },
     err=>{
       debugLog("ERROR listener: "+err.code+" - "+err.message);
-      console.error("[RUNCAR] ERROR listener ofertas:",err);
-      // FIX 1: Reintentar listener en caso de error de permisos temporal
+      console.error("[CLIENTE] ERROR listener ofertas:",err);
       if(err.code==="permission-denied"||err.code==="unavailable"){
         debugLog("Reintentando listener en 3s...");
         setTimeout(()=>{
@@ -1092,7 +1096,7 @@ function mostrarSiguienteOferta(viajeId,ofertaOriginalValor){
   const item=ofertasQueue.shift();
   const{oferta}=item;
   debugLog("Mostrando toast: "+oferta.driverNombre+" $"+oferta.monto);
-  console.log("[RUNCAR] Mostrando oferta:",oferta.id,oferta.driverNombre,"$"+oferta.monto);
+  console.log("[CLIENTE] Mostrando oferta:",oferta.id,oferta.driverNombre,"$"+oferta.monto);
   ofertaToastActual={oferta,viajeId,ofertaOriginalValor:ofertaOriginalValor||_ofertaOrigGlobal};
   gi("otFoto").src=oferta.driverFoto||"";
   gi("otNombre").innerText=oferta.driverNombre||"Conductor";
@@ -1114,6 +1118,7 @@ gi("btnAceptarOfertaToast").addEventListener("click",async()=>{
   if(!ofertaToastActual||!currentChatTrip)return;
   detenerTimerOferta();
   const{oferta,viajeId}=ofertaToastActual;
+  console.log("[CLIENTE] Aceptando oferta",oferta.id,"del driver",oferta.driverNombre,"$"+oferta.monto);
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"aceptada"});
   await updateDoc(doc(db,"viajes",viajeId),{
     estado:"aceptado",ofertaActual:oferta.monto,
@@ -1131,6 +1136,7 @@ gi("btnRechazarOfertaToast").addEventListener("click",async()=>{
   detenerTimerOferta();
   const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
   const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
+  console.log("[CLIENTE] Rechazando oferta",oferta.id,"del driver",oferta.driverNombre);
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"});
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId});
   ocultarOfertaToastActual();mostrandoOferta=false;
@@ -1277,6 +1283,8 @@ function cerrarChats(){
   ofertasMostradas.clear();ofertasQueue.length=0;ofertaToastActual=null;
   gi("ofertasContador").style.display="none";
   gi("btnCancelarViajePublicado").style.display="none";
+  // NUEVO: Rehabilitar boton publicar al cerrar chats
+  setPublicarHabilitado(true);
   limpiarEstadoModal();
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
   if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
@@ -1291,6 +1299,8 @@ function escucharEstadoFinalViaje(viajeId){
       if(v.estado==="cancelado")toast("El viaje fue cancelado.");
       if(v.estado==="finalizado")toast("Viaje finalizado.");
       cerrarChats();
+      // NUEVO: Siempre rehabilitar al finalizar/cancelar desde cualquier flujo
+      setPublicarHabilitado(true);
     }
   });
 }
