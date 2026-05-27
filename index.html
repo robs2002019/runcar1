@@ -275,6 +275,8 @@ button:hover{opacity:.88;transform:translateY(-1px);}
     <button class="btn" id="btnCalcular">CALCULAR RUTA</button>
     <button class="btn" id="btnPublicar" style="margin-top:6px;">PUBLICAR VIAJE</button>
     <button class="btn-red" id="btnCancelarViajePublicado" style="margin-top:6px;display:none;">CANCELAR VIAJE PUBLICADO</button>
+    <!-- Panel debug ofertas -->
+    <div id="debugOfertas" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:10px;margin-top:8px;font-size:11px;color:#4caf50;font-family:monospace;max-height:120px;overflow-y:auto;"></div>
   </div>
 
   <!-- Chat activo cliente -->
@@ -486,14 +488,15 @@ function uiTimerOferta(s){
   gi("timerOfertasSub").innerText=u&&s>0?"Solo "+s+"s para aceptar o rechazar":"Acepta o rechaza esta oferta antes de que expire";
 }
 async function onTimerOfertaExpirado(){
-  // Tiempo agotado para esta oferta — rechazarla y pasar a siguiente
   if(!ofertaToastActual||!currentChatTrip)return;
-  const{oferta,viajeId}=ofertaToastActual;
+  const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
+  const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"}).catch(()=>{});
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId}).catch(()=>{});
   ocultarOfertaToastActual();
   mostrandoOferta=false;
-  mostrarSiguienteOferta(viajeId,oferta.monto);
+  toast("Tiempo agotado para esta oferta.",3000);
+  mostrarSiguienteOferta(viajeId,origVal);
 }
 
 const gi=id=>document.getElementById(id);
@@ -934,41 +937,76 @@ function escucharEstadoViajesCliente(){
 }
 
 // ---- COLA DE OFERTAS — se muestran UNA A UNA ----
+// Guardamos el ofertaOriginalValor en variable de modulo para acceso global
+let _ofertaOrigGlobal=0;
+
+function debugLog(msg){
+  const box=gi("debugOfertas");if(!box)return;
+  box.style.display="block";
+  const d=new Date();const ts=d.getHours()+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+  box.innerHTML+="<div>["+ts+"] "+msg+"</div>";box.scrollTop=box.scrollHeight;
+}
+
 function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
+  _ofertaOrigGlobal=ofertaOriginalValor;
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
-  unsubOfertasCol=onSnapshot(query(collection(db,"viajes",viajeId,"ofertas"),orderBy("timestamp","asc")),snap=>{
+  debugLog("Iniciando listener ofertas viaje: "+viajeId.slice(-6));
+  console.log("[RUNCAR] Iniciando listener ofertas para viaje:",viajeId);
+  // Usamos onSnapshot SIN orderBy para evitar problemas de indices en Firestore
+  unsubOfertasCol=onSnapshot(collection(db,"viajes",viajeId,"ofertas"),snap=>{
+    debugLog("Snap recibido: "+snap.size+" docs");
+    console.log("[RUNCAR] Snap ofertas recibido, total docs:",snap.size);
+    // Ordenar por timestamp manualmente
+    const todos=[];
+    snap.forEach(ds=>todos.push({id:ds.id,...ds.data()}));
+    todos.sort((a,b)=>{const ta=a.timestamp||"",tb=b.timestamp||"";return ta>tb?1:ta<tb?-1:0;});
     let pendientes=0;
-    snap.forEach(ds=>{
-      const o={id:ds.id,...ds.data()};
+    todos.forEach(o=>{
+      debugLog("Doc: "+o.id.slice(-4)+" | "+o.estado+" | "+o.driverNombre+" | $"+o.monto);
+      console.log("[RUNCAR] Oferta doc:",o.id,"estado:",o.estado,"driver:",o.driverNombre,"monto:",o.monto);
       if(o.estado==="pendiente"){
         pendientes++;
         if(!ofertasMostradas.has(o.id)){
+          debugLog("→ NUEVA oferta encolada de "+o.driverNombre);
+          console.log("[RUNCAR] Oferta NUEVA pendiente, encolando:",o.id);
           ofertasMostradas.add(o.id);
           ofertasQueue.push({oferta:o,viajeId,ofertaOriginalValor});
         }
       }
     });
     const cnt=gi("ofertasContador");
-    if(pendientes>0){cnt.style.display="block";cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" disponible"+(pendientes>1?"s":"");}
-    else{cnt.style.display="none";}
+    if(pendientes>0){
+      cnt.style.display="block";
+      cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" en espera";
+    }else{cnt.style.display="none";}
+    debugLog("Pendientes:"+pendientes+" Cola:"+ofertasQueue.length+" Mostrando:"+mostrandoOferta);
+    console.log("[RUNCAR] Pendientes:",pendientes,"cola:",ofertasQueue.length,"mostrando:",mostrandoOferta);
     if(!mostrandoOferta&&ofertasQueue.length>0){
       mostrarSiguienteOferta(viajeId,ofertaOriginalValor);
     }
+  },err=>{
+    debugLog("ERROR: "+err.code+" - "+err.message);
+    console.error("[RUNCAR] ERROR listener ofertas:",err.code,err.message);
+    toast("Error escuchando ofertas: "+err.message,6000);
   });
 }
 
 function mostrarSiguienteOferta(viajeId,ofertaOriginalValor){
   if(ofertasQueue.length===0){mostrandoOferta=false;return;}
+  // Si el viaje ya fue aceptado o finalizado, no mostrar
+  if(chatClienteAbierto){mostrandoOferta=false;return;}
   mostrandoOferta=true;
   const item=ofertasQueue.shift();
   const{oferta}=item;
-  ofertaToastActual={oferta,viajeId};
+  debugLog("Mostrando toast: "+oferta.driverNombre+" $"+oferta.monto);
+  console.log("[RUNCAR] Mostrando oferta toast:",oferta.id,"driver:",oferta.driverNombre,"$"+oferta.monto);
+  ofertaToastActual={oferta,viajeId,ofertaOriginalValor:ofertaOriginalValor||_ofertaOrigGlobal};
   gi("otFoto").src=oferta.driverFoto||"";
-  gi("otNombre").innerText=oferta.driverNombre;
+  gi("otNombre").innerText=oferta.driverNombre||"Conductor";
   gi("otVehiculo").innerText=(oferta.marca||"")+" "+(oferta.modelo||"");
   gi("otPlaca").innerText=oferta.placa||"";
   gi("otMonto").innerText=Number(oferta.monto).toFixed(2);
-  gi("otOfertaOriginal").innerText=Number(ofertaOriginalValor).toFixed(2);
+  gi("otOfertaOriginal").innerText=Number(ofertaOriginalValor||_ofertaOrigGlobal).toFixed(2);
   gi("ofertaToast").classList.add("visible");
   iniciarTimerOferta();
 }
@@ -998,15 +1036,14 @@ gi("btnAceptarOfertaToast").addEventListener("click",async()=>{
 gi("btnRechazarOfertaToast").addEventListener("click",async()=>{
   if(!ofertaToastActual||!currentChatTrip)return;
   detenerTimerOferta();
-  const{oferta,viajeId}=ofertaToastActual;
-  const ofertaOrigVal=parseFloat(gi("otOfertaOriginal").innerText)||0;
+  const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
+  const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"});
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId});
   ocultarOfertaToastActual();
   mostrandoOferta=false;
   toast("Oferta rechazada.");setBadge("buscando");
-  // mostrar siguiente si hay
-  setTimeout(()=>mostrarSiguienteOferta(viajeId,ofertaOrigVal),400);
+  setTimeout(()=>mostrarSiguienteOferta(viajeId,origVal),400);
 });
 
 async function abrirChatClienteFinal(id){
@@ -1176,3 +1213,4 @@ gi("btnCancelarDriver").addEventListener("click",async()=>{if(!confirm("Cancelar
 </script>
 </body>
 </html>
+
