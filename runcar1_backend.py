@@ -38,7 +38,7 @@ from typing import Optional, List
 
 # ── FastAPI & HTTP ───────────────────────────────────────────────────────────
 from fastapi import (
-    FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Body
+    FastAPI, Depends, HTTPException, status, Body
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -52,8 +52,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # ── Pydantic ─────────────────────────────────────────────────────────────────
-from pydantic import BaseModel, EmailStr, Field
-
+from pydantic import BaseModel
 # ════════════════════════════════════════════════════════════════════════════
 # CONFIGURACION
 # ════════════════════════════════════════════════════════════════════════════
