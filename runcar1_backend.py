@@ -76,22 +76,28 @@ VIAJE_EXPIRY_SECONDS = 200
 # ════════════════════════════════════════════════════════════════════════════
 
 def init_firebase():
-    """Inicializa Firebase Admin SDK una sola vez."""
+    cred_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "")
+    print(f"[DEBUG] CRED_JSON length: {len(cred_json)}")
+    print(f"[DEBUG] CRED_JSON starts with: {cred_json[:30] if cred_json else 'VACIO'}")
+    
     if not firebase_admin._apps:
-        if os.path.exists(FIREBASE_CRED_PATH):
+        if cred_json:
+            try:
+                cred_dict = json.loads(cred_json)
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+                print("[Firebase] Inicializado desde variable de entorno JSON ✓")
+            except Exception as e:
+                print(f"[Firebase] ERROR: {e}")
+                return None
+        elif os.path.exists(FIREBASE_CRED_PATH):
             cred = credentials.Certificate(FIREBASE_CRED_PATH)
+            firebase_admin.initialize_app(cred)
+            print(f"[Firebase] Inicializado desde archivo ✓")
         else:
-            # En dev, permite arrancar sin credenciales (modo emulador / mock)
-            print(
-                "[ADVERTENCIA] No se encontró serviceAccountKey.json. "
-                "Usando emulador o modo sin Firebase."
-            )
+            print("[ADVERTENCIA] No se encontró serviceAccountKey.json.")
             return None
-        firebase_admin.initialize_app(cred)
     return firestore.client()
-
-
-db = init_firebase()
 
 # ════════════════════════════════════════════════════════════════════════════
 # SEGURIDAD / JWT
