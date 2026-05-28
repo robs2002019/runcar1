@@ -1,6 +1,2 @@
 fastapi
 uvicorn[standard]
-python-jose[cryptography]
-passlib[bcrypt]
-firebase-admin
-python-multipart
