@@ -1,8 +1,10 @@
-[build]
-builder = "NIXPACKS"
-buildCommand = "pip install -r requirements.txt"
+import os
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
-[deploy]
-startCommand = "uvicorn server:app --host 0.0.0.0 --port $PORT"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+app = FastAPI()
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    with open("index.html", "r", encoding="utf-8") as f:
+        return f.read()
