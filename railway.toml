@@ -2,6 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "uvicorn runcar_backend:app --host 0.0.0.0 --port $PORT"
+startCommand = "sh -c \"uvicorn runcar_backend:app --host 0.0.0.0 --port ${PORT:-8000}\""
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
