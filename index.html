@@ -345,7 +345,6 @@ let unsubEstadoViajes=null,unsubChatPrivado=null,unsubViajeModal=null,unsubOfert
 const ofertasMostradas=new Set();
 let ofertaToastActual=null;
 
-// TIMER
 const TIMER_DUR=200,CIRC=2*Math.PI*22;
 let timerInterval=null,timerSeg=0;
 
@@ -474,7 +473,6 @@ function escucharPosDrv(id){
   });
 }
 
-// AUTH
 gi("btnToggleRegister").addEventListener("click",()=>{isRegister=!isRegister;gi("registerFields").style.display=isRegister?"block":"none";gi("authBtn").innerText=isRegister?"CREAR CUENTA":"INGRESAR";});
 gi("rol").addEventListener("change",e=>{gi("driverFields").style.display=e.target.value==="driver"?"block":"none";});
 
@@ -535,7 +533,6 @@ onAuthStateChanged(auth,async user=>{
   }
 });
 
-// GPS CLIENTE
 gi("btnGPS").addEventListener("click",()=>{
   navigator.geolocation.getCurrentPosition(async pos=>{
     miLat=pos.coords.latitude;miLng=pos.coords.longitude;
@@ -584,7 +581,6 @@ gi("btnPublicar").addEventListener("click",async()=>{
   setBadge("buscando");
   gi("btnCancelarViajePublicado").style.display="";
   iniciarTimer();
-  // FIX 1: listener de ofertas arranca inmediatamente al publicar
   escucharOfertasSubcoleccion(viaje.id,oferta);
   toast("Viaje publicado, esperando conductores... (200s)");
 });
@@ -604,7 +600,6 @@ function setBadge(estado){
   else if(estado==="aceptado"){b.classList.add("estado-aceptado");b.innerText="Viaje confirmado! Conductor en camino";}
 }
 
-// VIAJES DISPONIBLES DRIVER
 function escucharViajesDisponibles(){
   onSnapshot(collection(db,"viajes"),snap=>{
     const cont=gi("viajes");cont.innerHTML="";
@@ -632,7 +627,6 @@ function escucharViajesDisponibles(){
   });
 }
 
-// MODAL DRIVER
 async function abrirModalDriver(id){
   if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
   viajeActivoId=id;contadorOfertas=0;
@@ -653,10 +647,8 @@ async function abrirModalDriver(id){
     +"</div>"+(v.notas?"<div style='font-size:12px;background:var(--card2);padding:8px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"");
   gi("modalDriver").classList.add("open");
   escucharChatPrivadoModal(id);
-  // FIX 2+3: listener completo del viaje en modal
   unsubViajeModal=onSnapshot(doc(db,"viajes",id),s=>{
     const vv=s.data();if(!vv)return;
-    // Aceptado por este driver (cliente acepto mi oferta o yo acepte precio)
     if(vv.estado==="aceptado"&&vv.driverId===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box aceptada";eb.style.display="block";eb.innerText="El cliente acepto tu oferta! Preparando viaje...";
       setTimeout(()=>{
@@ -666,19 +658,16 @@ async function abrirModalDriver(id){
         }
       },1500);return;
     }
-    // Aceptado por otro driver
     if(vv.estado==="aceptado"&&vv.driverId&&vv.driverId!==miUid){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
       toast("Este viaje fue tomado por otro conductor.");
       if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}return;
     }
-    // FIX 2: cancelado (incluye tiempo_agotado)
     if(vv.estado==="cancelado"){
       gi("modalDriver").classList.remove("open");limpiarEstadoModal();
-      toast(vv.motivoCancelacion==="tiempo_agotado"?"El tiempo de este viaje expiro. El cliente debera republicarlo.":"El cliente cancelo este viaje.",5000);
+      toast(vv.motivoCancelacion==="tiempo_agotado"?"El tiempo de este viaje expiro.":"El cliente cancelo este viaje.",5000);
       if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}return;
     }
-    // FIX 3: cliente rechazo mi oferta
     if(vv.ultimaOfertaRechazadaDriver===miUid){
       const eb=gi("modalDriverEstado");eb.className="oferta-estado-box rechazada";eb.style.display="block";
       eb.innerText="El cliente rechazo tu oferta. Puedes enviar otra ("+contadorOfertas+"/3).";
@@ -748,8 +737,6 @@ gi("btnDrvMsgPriv").addEventListener("click",async()=>{
   inp.value="";
 });
 
-// LISTENER PRINCIPAL CLIENTE
-// FIX 1: ya NO inicia ofertas desde aqui - se hace en btnPublicar
 function escucharEstadoViajesCliente(){
   if(unsubEstadoViajes){unsubEstadoViajes();unsubEstadoViajes=null;}
   unsubEstadoViajes=onSnapshot(collection(db,"viajes"),snap=>{
@@ -771,7 +758,6 @@ function escucharEstadoViajesCliente(){
   });
 }
 
-// FIX 1: listener de ofertas independiente, llamado al publicar
 function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
   if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
   unsubOfertasCol=onSnapshot(query(collection(db,"viajes",viajeId,"ofertas"),orderBy("timestamp","asc")),snap=>{
@@ -813,7 +799,6 @@ gi("btnRechazarOfertaToast").addEventListener("click",async()=>{
   if(!ofertaToastActual||!currentChatTrip)return;
   const{oferta,viajeId}=ofertaToastActual;
   await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"});
-  // FIX 3: notificar al driver que fue rechazado
   await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId});
   ocultarOfertaToast();ofertasMostradas.delete(oferta.id);
   toast("Oferta rechazada. Puedes esperar mas conductores.");setBadge("buscando");
@@ -878,7 +863,7 @@ gi("btnDriverEnviarMensaje").addEventListener("click",async()=>{
 function escucharMensajesGenerales(){
   onSnapshot(query(collection(db,"mensajesGenerales"),orderBy("timestamp","desc"),limit(20)),snap=>{
     const box=gi("mensajesGeneralesDriver");if(!box)return;box.innerHTML="";
-    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg sys";div.innerHTML="Aviso de "+( m.de||"Admin")+": "+m.msg;box.appendChild(div);});
+    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg sys";div.innerHTML="Aviso de "+(m.de||"Admin")+": "+m.msg;box.appendChild(div);});
   });
   onSnapshot(query(collection(db,"notificacionesDrivers"),orderBy("timestamp","desc"),limit(5)),snap=>{
     snap.forEach(d=>{const m=d.data();if(m.tipo==="asignado"){show("asignadoMsg",true);gi("asignadoMsg").innerText=m.mensaje;setTimeout(()=>show("asignadoMsg",false),8000);}});
@@ -956,8 +941,8 @@ function cerrarChats(){
 function escucharEstadoFinalViaje(viajeId){
   onSnapshot(doc(db,"viajes",viajeId),snap=>{
     const v=snap.data();if(!v)return;
-    if(v.estado==="finalizado"||v.estado==
-       if(v.estado==="cancelado")toast("El viaje fue cancelado.");
+    if(v.estado==="finalizado"||v.estado==="cancelado"){
+      if(v.estado==="cancelado")toast("El viaje fue cancelado.");
       if(v.estado==="finalizado")toast("Viaje finalizado.");
       cerrarChats();
     }
