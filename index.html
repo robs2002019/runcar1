@@ -1,856 +1,1314 @@
-# runcar_backend.py
-"""
-RUN CAR PRO MAX — Backend FastAPI (VERSION MEJORADA)
-====================================================
-
-MEJORAS IMPLEMENTADAS:
-✔ Seguridad JWT reforzada
-✔ Firebase Admin limpio
-✔ Validación EmailStr
-✔ Validación de imágenes Base64
-✔ Rate limiting login
-✔ Protección anti-spam chat
-✔ Validación de roles
-✔ Expiración automática de viajes
-✔ Logs profesionales
-✔ CORS seguro
-✔ Paginación
-✔ Manejo robusto de errores
-✔ Middleware de seguridad
-✔ Validación de contraseñas
-✔ Protección chats privados
-✔ Arquitectura optimizada
-
-REQUISITOS:
-pip install fastapi uvicorn python-jose[cryptography] passlib[bcrypt]
-pip install firebase-admin python-multipart pydantic[email]
-pip install slowapi python-dotenv
-
-EJECUTAR:
-uvicorn runcar_backend:app --reload --port 8000
-"""
-
-# ═══════════════════════════════════════════════════════════════
-# IMPORTS
-# ═══════════════════════════════════════════════════════════════
-
-import os
-import re
-import base64
-import hashlib
-import logging
-from datetime import datetime, timedelta
-from typing import Optional
-
-# ── FASTAPI ───────────────────────────────────────────────────
-from fastapi import (
-    FastAPI,
-    Depends,
-    HTTPException,
-    status,
-    Request
-)
-
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import (
-    OAuth2PasswordBearer,
-    OAuth2PasswordRequestForm
-)
-
-# ── RATE LIMIT ────────────────────────────────────────────────
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-
-# ── JWT ───────────────────────────────────────────────────────
-from jose import JWTError, jwt
-
-# ── PASSWORD HASH ─────────────────────────────────────────────
-from passlib.context import CryptContext
-
-# ── FIREBASE ──────────────────────────────────────────────────
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-# ── PYDANTIC ──────────────────────────────────────────────────
-from pydantic import (
-    BaseModel,
-    EmailStr,
-    Field
-)
-
-# ═══════════════════════════════════════════════════════════════
-# LOGGING
-# ═══════════════════════════════════════════════════════════════
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
-
-logger = logging.getLogger("RUN_CAR_PRO_MAX")
-
-# ═══════════════════════════════════════════════════════════════
-# CONFIG
-# ═══════════════════════════════════════════════════════════════
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY no configurada")
-
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 7
-
-APP_COMMISSION_RATE = 0.08
-
-VIAJE_EXPIRY_SECONDS = 200
-
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
-
-FIREBASE_CRED_PATH = os.getenv(
-    "FIREBASE_CREDENTIALS_JSON",
-    "serviceAccountKey.json"
-)
-
-# ═══════════════════════════════════════════════════════════════
-# RATE LIMITER
-# ═══════════════════════════════════════════════════════════════
-
-limiter = Limiter(key_func=get_remote_address)
-
-# ═══════════════════════════════════════════════════════════════
-# FIREBASE
-# ═══════════════════════════════════════════════════════════════
-
-def init_firebase():
-
-    if not firebase_admin._apps:
-
-        if not os.path.exists(FIREBASE_CRED_PATH):
-            raise RuntimeError(
-                "No existe FIREBASE_CREDENTIALS_JSON"
-            )
-
-        cred = credentials.Certificate(FIREBASE_CRED_PATH)
-
-        firebase_admin.initialize_app(cred)
-
-    return firestore.client()
-
-db = init_firebase()
-
-# ═══════════════════════════════════════════════════════════════
-# APP
-# ═══════════════════════════════════════════════════════════════
-
-app = FastAPI(
-    title="RUN CAR PRO MAX API",
-    version="2.0.0"
-)
-
-app.state.limiter = limiter
-
-app.add_exception_handler(
-    RateLimitExceeded,
-    lambda request, exc: HTTPException(
-        status_code=429,
-        detail="Demasiadas solicitudes"
-    )
-)
-
-app.add_middleware(SlowAPIMiddleware)
-
-# ═══════════════════════════════════════════════════════════════
-# CORS
-# ═══════════════════════════════════════════════════════════════
-
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://runcarpro.com"
-    "https://robs2002019.github.io/runcar1/"
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-# ═══════════════════════════════════════════════════════════════
-# AUTH
-# ═══════════════════════════════════════════════════════════════
-
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
-
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/auth/login"
-)
-
-# ═══════════════════════════════════════════════════════════════
-# HELPERS
-# ═══════════════════════════════════════════════════════════════
-
-def hash_password(password: str):
-
-    return pwd_context.hash(password)
-
-def verify_password(password, hashed):
-
-    return pwd_context.verify(password, hashed)
-
-def create_access_token(data: dict):
-
-    to_encode = data.copy()
-
-    expire = datetime.utcnow() + timedelta(
-        days=ACCESS_TOKEN_EXPIRE_DAYS
-    )
-
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.utcnow()
-    })
-
-    return jwt.encode(
-        to_encode,
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
-
-def validate_password(password: str):
-
-    if len(password) < 8:
-        raise HTTPException(
-            400,
-            "Contraseña mínima: 8 caracteres"
-        )
-
-    if not re.search(r"[A-Z]", password):
-        raise HTTPException(
-            400,
-            "Debe contener una mayúscula"
-        )
-
-    if not re.search(r"\d", password):
-        raise HTTPException(
-            400,
-            "Debe contener un número"
-        )
-
-def validate_base64_image(data: str):
-
-    if not data:
-        return
-
-    try:
-        decoded = base64.b64decode(data)
-
-        if len(decoded) > MAX_IMAGE_SIZE:
-            raise HTTPException(
-                400,
-                "Imagen demasiado grande"
-            )
-
-    except Exception:
-        raise HTTPException(
-            400,
-            "Imagen inválida"
-        )
-
-# ═══════════════════════════════════════════════════════════════
-# USER AUTH
-# ═══════════════════════════════════════════════════════════════
-
-async def get_current_user(
-    token: str = Depends(oauth2_scheme)
-):
-
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Token inválido"
-    )
-
-    try:
-
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
-        )
-
-        uid = payload.get("sub")
-
-        if uid is None:
-            raise credentials_exception
-
-    except JWTError:
-        raise credentials_exception
-
-    snap = db.collection(
-        "usuarios_privados"
-    ).document(uid).get()
-
-    if not snap.exists:
-        raise credentials_exception
-
-    user = snap.to_dict()
-
-    if user.get("estado") != "activo":
-        raise HTTPException(
-            403,
-            "Cuenta inactiva"
-        )
-
-    return user
-
-def require_role(*roles):
-
-    async def checker(
-        user: dict = Depends(get_current_user)
-    ):
-
-        if user.get("rol") not in roles:
-            raise HTTPException(
-                403,
-                "Acceso denegado"
-            )
-
-        return user
-
-    return checker
-
-# ═══════════════════════════════════════════════════════════════
-# MODELS
-# ═══════════════════════════════════════════════════════════════
-
-class RegisterRequest(BaseModel):
-
-    email: EmailStr
-
-    password: str
-
-    nombre: str = Field(
-        min_length=2,
-        max_length=100
-    )
-
-    telefono: Optional[str] = ""
-
-    rol: str = "cliente"
-
-    placa: Optional[str] = ""
-    marca: Optional[str] = ""
-    modelo: Optional[str] = ""
-    anio: Optional[str] = ""
-
-    foto_perfil: Optional[str] = ""
-
-    licencia: Optional[str] = ""
-    penales: Optional[str] = ""
-    solvencia: Optional[str] = ""
-
-    foto_placa: Optional[str] = ""
-
-    foto_carro1: Optional[str] = ""
-    foto_carro2: Optional[str] = ""
-    foto_carro3: Optional[str] = ""
-
-class LoginResponse(BaseModel):
-
-    access_token: str
-    token_type: str
-    uid: str
-    rol: str
-
-class PublicarViajeRequest(BaseModel):
-
-    origen: str
-    destino: str
-    oferta_original: float
-
-    personas: int = 1
-    bebes: int = 0
-    mascotas: int = 0
-
-    notas: Optional[str] = ""
-
-# ═══════════════════════════════════════════════════════════════
-# AUTH ENDPOINTS
-# ═══════════════════════════════════════════════════════════════
-
-@app.post(
-    "/auth/register",
-    tags=["Auth"]
-)
-async def register(body: RegisterRequest):
-
-    validate_password(body.password)
-
-    validate_base64_image(body.foto_perfil)
-    validate_base64_image(body.licencia)
-    validate_base64_image(body.penales)
-    validate_base64_image(body.solvencia)
-
-    existing = (
-        db.collection("usuarios_privados")
-        .where("email", "==", body.email)
-        .limit(1)
-        .get()
-    )
-
-    if existing:
-        raise HTTPException(
-            400,
-            "Correo ya registrado"
-        )
-
-    uid = hashlib.sha256(
-        f"{body.email}{datetime.utcnow()}".encode()
-    ).hexdigest()[:28]
-
-    password_hash = hash_password(body.password)
-
-    public_user = {
-
-        "uid": uid,
-        "nombre": body.nombre,
-        "telefono": body.telefono,
-        "rol": body.rol,
-        "estado": "activo",
-        "foto_perfil": body.foto_perfil,
-        "timestamp": datetime.utcnow().isoformat()
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RUN CAR PRO MAX</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--g:#00e676;--g2:#00c853;--dark:#0d0d0d;--card:#1a1a1a;--card2:#222;--blue:#2979ff;--red:#ff1744;--yellow:#ffd600;--orange:#ff6d00;--text:#f0f0f0;--sub:#888;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:"Nunito",sans-serif;background:var(--dark);color:var(--text);min-height:100vh;}
+h1,h2,h3,.logo{font-family:"Rajdhani",sans-serif;letter-spacing:1px;}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#111;border-bottom:2px solid var(--g);position:sticky;top:0;z-index:800;}
+.logo{font-size:20px;color:var(--g);font-weight:700;letter-spacing:2px;}
+.nav-right{display:flex;align-items:center;gap:6px;}
+.nav-tabs{display:flex;gap:6px;}
+.nav-tab{background:none;border:1px solid #333;color:#aaa;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-family:"Rajdhani",sans-serif;font-weight:600;letter-spacing:1px;transition:.2s;width:auto;margin-top:0;}
+.nav-tab.active,.nav-tab:hover{background:var(--g);color:#000;border-color:var(--g);}
+.btn-logout{background:none;border:1px solid var(--red);color:var(--red);padding:6px 10px;border-radius:8px;font-size:11px;cursor:pointer;font-family:"Rajdhani",sans-serif;font-weight:700;letter-spacing:1px;transition:.2s;width:auto;margin-top:0;}
+.btn-logout:hover{background:var(--red);color:#fff;}
+.container{max-width:580px;margin:auto;padding:12px;}
+.section{display:none;}.section.active{display:block;}
+.card{background:var(--card);border:1px solid #2a2a2a;padding:16px;border-radius:16px;margin-bottom:14px;box-shadow:0 4px 20px rgba(0,0,0,.5);}
+.card-title{font-family:"Rajdhani",sans-serif;font-size:17px;font-weight:700;color:var(--g);margin-bottom:12px;letter-spacing:1px;border-bottom:1px solid #2a2a2a;padding-bottom:8px;}
+input,select,textarea{width:100%;padding:11px 14px;margin-top:7px;border-radius:10px;border:1px solid #333;font-size:14px;background:#111;color:var(--text);font-family:"Nunito",sans-serif;transition:.2s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--g);box-shadow:0 0 0 2px rgba(0,230,118,.15);}
+select option{background:#111;}
+textarea{resize:none;min-height:80px;}
+label{font-size:12px;color:var(--sub);margin-top:10px;display:block;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+button{width:100%;padding:13px;margin-top:8px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:.2s;font-family:"Rajdhani",sans-serif;letter-spacing:1px;}
+button:hover{opacity:.88;transform:translateY(-1px);}
+.btn{background:linear-gradient(135deg,var(--g),var(--g2));color:#000;}
+.btn-blue{background:linear-gradient(135deg,#2979ff,#1565c0);color:#fff;}
+.btn-red{background:linear-gradient(135deg,#ff1744,#c62828);color:#fff;}
+.btn-sm{padding:8px 14px;font-size:13px;width:auto;margin-top:0;}
+.loader{display:none;text-align:center;padding:10px;color:var(--g);font-size:13px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2a2a2a;}
+.stat-row:last-child{border-bottom:none;}
+.stat-label{font-size:13px;color:var(--sub);}
+.stat-val{font-weight:700;color:var(--g);font-family:"Rajdhani",sans-serif;font-size:16px;}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;}
+.badge-g{background:rgba(0,230,118,.15);color:var(--g);border:1px solid var(--g);}
+.badge-r{background:rgba(255,23,68,.15);color:var(--red);border:1px solid var(--red);}
+.badge-b{background:rgba(41,121,255,.15);color:var(--blue);border:1px solid var(--blue);}
+.badge-y{background:rgba(255,214,0,.15);color:var(--yellow);border:1px solid var(--yellow);}
+#map{height:240px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
+#chatMapCliente,#chatMapDriver{height:300px;border-radius:12px;margin-bottom:10px;overflow:hidden;border:1px solid #2a2a2a;}
+.chat-box{height:200px;overflow-y:auto;background:#111;padding:10px;border-radius:10px;margin-top:8px;border:1px solid #2a2a2a;}
+.msg{padding:8px 12px;border-radius:10px;margin-bottom:7px;background:#2a2a2a;font-size:13px;max-width:85%;}
+.msg b{font-size:12px;color:var(--sub);display:block;margin-bottom:2px;}
+.msg.me{background:rgba(0,230,118,.2);border:1px solid var(--g);margin-left:auto;}
+.msg.me b{color:var(--g);}
+.msg.sys{background:rgba(255,214,0,.1);border:1px solid var(--yellow);color:var(--yellow);text-align:center;width:100%;max-width:100%;font-size:12px;}
+.trip-card{background:var(--card2);border:1px solid #2a2a2a;padding:13px;border-radius:13px;margin-bottom:10px;}
+.chat-header-box{background:var(--card2);border:1px solid #2a2a2a;border-radius:14px;padding:14px;margin-bottom:10px;}
+.chat-header-box .avatars{display:flex;justify-content:center;align-items:center;gap:14px;margin-bottom:12px;}
+.chat-header-box .avatar-item{text-align:center;}
+.chat-header-box img{width:56px;height:56px;border-radius:50%;object-fit:cover;}
+.chat-header-box .avatar-name{font-size:11px;font-weight:700;margin-top:4px;color:var(--text);}
+.chat-header-box .avatar-role{font-size:10px;color:var(--sub);}
+.vehicle-tag{background:linear-gradient(135deg,var(--g),var(--g2));color:#000;border-radius:10px;padding:8px 14px;text-align:center;font-family:"Rajdhani",sans-serif;}
+.vehicle-tag .vname{font-size:16px;font-weight:700;letter-spacing:1px;}
+.vehicle-tag .vplaca{font-size:13px;letter-spacing:3px;margin-top:2px;}
+.map-info{display:flex;gap:8px;margin-bottom:8px;}
+.map-info-item{flex:1;background:var(--card2);border:1px solid #2a2a2a;border-radius:10px;padding:8px;text-align:center;}
+.map-info-item .mi-val{font-family:"Rajdhani",sans-serif;font-size:18px;color:var(--g);font-weight:700;}
+.map-info-item .mi-label{font-size:11px;color:var(--sub);}
+.link-pago{display:block;background:linear-gradient(135deg,#ffd600,#f9a825);color:#000;text-align:center;padding:13px;border-radius:10px;font-family:"Rajdhani",sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;text-decoration:none;margin-top:8px;}
+.email-soporte{text-align:center;padding:10px;color:var(--sub);font-size:12px;margin-top:4px;}
+.email-soporte a{color:var(--g);text-decoration:none;font-weight:700;}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9000;justify-content:center;align-items:flex-start;padding:10px;overflow-y:auto;}
+.modal.open{display:flex;}
+.modal-box{background:var(--card);border:1px solid #2a2a2a;width:100%;max-width:500px;border-radius:20px;padding:16px;margin:auto;}
+.modal-title{font-family:"Rajdhani",sans-serif;font-size:20px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--g);letter-spacing:1px;}
+
+/* OFERTA TOAST */
+.oferta-toast{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9500;padding:12px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.7));pointer-events:none;}
+.oferta-toast.visible{display:block;}
+.oferta-card{background:var(--card);border:2px solid var(--yellow);border-radius:16px;padding:14px;pointer-events:all;box-shadow:0 -4px 30px rgba(255,214,0,.3);animation:slideUp .3s ease;}
+@keyframes slideUp{from{transform:translateY(100%);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.oferta-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.oferta-card-header img{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--orange);}
+.oferta-card-nombre{font-weight:700;font-size:15px;}
+.oferta-card-vehiculo{font-size:11px;color:var(--sub);}
+.oferta-card-monto{font-family:"Rajdhani",sans-serif;font-size:32px;font-weight:700;color:var(--yellow);text-align:center;padding:6px 0;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;margin:8px 0;}
+.oferta-card-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
+.oferta-card-btns button{margin-top:0;padding:12px;}
+
+/* TIMER OFERTA (150s) */
+.timer-ofertas-wrap{display:none;background:linear-gradient(135deg,rgba(41,121,255,.12),rgba(41,121,255,.05));border:1px solid var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:10px;align-items:center;gap:12px;}
+.timer-ofertas-wrap.visible{display:flex;}
+.timer-ofertas-circle{position:relative;width:56px;height:56px;flex-shrink:0;}
+.timer-ofertas-circle svg{transform:rotate(-90deg);}
+.timer-ofertas-bg{fill:none;stroke:#2a2a2a;stroke-width:5;}
+.timer-ofertas-prog{fill:none;stroke:var(--blue);stroke-width:5;stroke-linecap:round;stroke-dasharray:138.2;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear;}
+.timer-ofertas-prog.urgent{stroke:var(--red);}
+.timer-ofertas-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Rajdhani",sans-serif;font-size:15px;font-weight:700;color:var(--blue);}
+.timer-ofertas-num.urgent{color:var(--red);}
+.timer-ofertas-info{flex:1;}
+.timer-ofertas-title{font-family:"Rajdhani",sans-serif;font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.5px;}
+.timer-ofertas-title.urgent{color:var(--red);}
+.timer-ofertas-sub{font-size:11px;color:var(--sub);margin-top:2px;}
+@keyframes pulse-urgent{0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,.4);}50%{box-shadow:0 0 0 8px rgba(255,23,68,0);}}
+.timer-ofertas-wrap.urgent-pulse{animation:pulse-urgent 1s ease infinite;}
+
+/* TIMER PUBLICACION (buscando) */
+.timer-wrap{display:none;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(255,109,0,.15),rgba(255,109,0,.05));border:1px solid var(--orange);border-radius:12px;padding:10px 14px;margin-bottom:10px;}
+.timer-wrap.visible{display:flex;}
+.timer-circle{position:relative;width:54px;height:54px;flex-shrink:0;}
+.timer-circle svg{transform:rotate(-90deg);}
+.timer-circle-bg{fill:none;stroke:#2a2a2a;stroke-width:5;}
+.timer-circle-prog{fill:none;stroke:var(--orange);stroke-width:5;stroke-linecap:round;stroke-dasharray:138.2;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear;}
+.timer-circle-prog.urgent{stroke:var(--red);}
+.timer-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Rajdhani",sans-serif;font-size:15px;font-weight:700;color:var(--orange);}
+.timer-num.urgent{color:var(--red);}
+.timer-text{flex:1;}
+.timer-text-title{font-family:"Rajdhani",sans-serif;font-size:14px;font-weight:700;color:var(--orange);letter-spacing:1px;}
+.timer-text-title.urgent{color:var(--red);}
+.timer-text-sub{font-size:11px;color:var(--sub);margin-top:2px;}
+@keyframes pulse-urgent2{0%,100%{box-shadow:0 0 0 0 rgba(255,109,0,.4);}50%{box-shadow:0 0 0 8px rgba(255,109,0,0);}}
+.timer-wrap.urgent-pulse{animation:pulse-urgent2 1s ease infinite;}
+
+.oferta-estado-box{border-radius:10px;padding:10px 14px;text-align:center;font-family:"Rajdhani",sans-serif;font-weight:700;font-size:13px;letter-spacing:.5px;margin:8px 0;display:none;}
+.oferta-estado-box.enviada{background:rgba(0,230,118,.12);border:1px solid var(--g);color:var(--g);}
+.oferta-estado-box.rechazada{background:rgba(255,23,68,.12);border:1px solid var(--red);color:var(--red);}
+.oferta-estado-box.aceptada{background:rgba(255,214,0,.12);border:1px solid var(--yellow);color:var(--yellow);}
+.estado-badge{display:none;text-align:center;padding:9px;border-radius:10px;font-family:"Rajdhani",sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:10px;}
+.estado-buscando{background:rgba(255,214,0,.12);border:1px solid var(--yellow);color:var(--yellow);display:block;}
+.estado-ofertas{background:rgba(41,121,255,.12);border:1px solid var(--blue);color:var(--blue);display:block;}
+.estado-aceptado{background:rgba(0,230,118,.12);border:1px solid var(--g);color:var(--g);display:block;}
+.asignado-msg{background:rgba(255,214,0,.1);border:1px solid var(--yellow);color:var(--yellow);border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:700;margin-bottom:8px;display:none;}
+.ofertas-contador{background:rgba(41,121,255,.15);border:1px solid var(--blue);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--blue);font-weight:700;text-align:center;margin-bottom:8px;display:none;}
+.admin-table{width:100%;border-collapse:collapse;font-size:13px;}
+.admin-table th{background:#1a1a1a;color:var(--g);padding:8px;text-align:left;font-family:"Rajdhani",sans-serif;letter-spacing:.5px;}
+.admin-table td{padding:8px;border-bottom:1px solid #2a2a2a;vertical-align:middle;}
+.admin-table tr:hover td{background:#1e1e1e;}
+#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;padding:10px 22px;border-radius:30px;font-weight:700;font-size:14px;z-index:99999;display:none;font-family:"Rajdhani",sans-serif;letter-spacing:1px;box-shadow:0 4px 20px rgba(0,230,118,.4);}
+.map-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);}
+.map-legend-dot{width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex-shrink:0;}
+/* Boton publicar desactivado */
+#btnPublicar:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+@media(max-width:400px){.nav-tab{padding:5px 8px;font-size:11px;}.logo{font-size:16px;}.btn-logout{font-size:10px;padding:5px 8px;}}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- TOAST OFERTA PARA CLIENTE -->
+<div class="oferta-toast" id="ofertaToast">
+  <div class="oferta-card">
+    <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:var(--yellow);letter-spacing:2px;margin-bottom:8px;">OFERTA DE CONDUCTOR</div>
+    <div class="oferta-card-header">
+      <img id="otFoto" src="" alt="">
+      <div>
+        <div class="oferta-card-nombre" id="otNombre"></div>
+        <div class="oferta-card-vehiculo" id="otVehiculo"></div>
+        <div class="oferta-card-vehiculo" id="otPlaca"></div>
+      </div>
+    </div>
+    <div class="oferta-card-monto">$<span id="otMonto">0.00</span>
+      <div style="font-size:12px;color:var(--sub);margin-top:2px;">Tu oferta original: $<span id="otOfertaOriginal">0.00</span></div>
+    </div>
+    <div class="timer-ofertas-wrap visible" id="timerOfertasWrap">
+      <div class="timer-ofertas-circle">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle class="timer-ofertas-bg" cx="28" cy="28" r="22"/>
+          <circle class="timer-ofertas-prog" id="timerOfertasProg" cx="28" cy="28" r="22"/>
+        </svg>
+        <div class="timer-ofertas-num" id="timerOfertasNum">150</div>
+      </div>
+      <div class="timer-ofertas-info">
+        <div class="timer-ofertas-title" id="timerOfertasTitle">TIEMPO PARA DECIDIR</div>
+        <div class="timer-ofertas-sub" id="timerOfertasSub">Acepta o rechaza esta oferta antes de que expire</div>
+      </div>
+    </div>
+    <div class="oferta-card-btns">
+      <button class="btn" id="btnAceptarOfertaToast">ACEPTAR</button>
+      <button class="btn-red" id="btnRechazarOfertaToast">RECHAZAR</button>
+    </div>
+  </div>
+</div>
+
+<div class="nav" id="mainNav" style="display:none;">
+  <div class="logo">RUNCAR</div>
+  <div class="nav-right"><div class="nav-tabs" id="navTabs"></div><button class="btn-logout" id="btnLogout">SALIR</button></div>
+</div>
+
+<div class="container">
+
+<!-- AUTH -->
+<div id="authSection" class="section active">
+  <div style="text-align:center;padding:30px 0 10px;">
+    <div style="font-family:Rajdhani,sans-serif;font-size:36px;font-weight:700;color:var(--g);letter-spacing:3px;">RUN CAR</div>
+    <div style="font-size:12px;color:var(--sub);letter-spacing:4px;">PRO MAX</div>
+  </div>
+  <div class="card">
+    <div class="card-title">ACCESO</div>
+    <input type="email" id="email" placeholder="Correo electronico">
+    <input type="password" id="password" placeholder="Contrasena">
+    <div id="registerFields" style="display:none;">
+      <input type="text" id="nombre" placeholder="Nombre completo">
+      <label>Foto de Perfil</label><input type="file" id="fotoPerfil" accept="image/*">
+      <div style="display:flex;gap:6px;">
+        <select id="reg-prefijo" style="width:45%;margin-top:7px;">
+          <option value="+1">+1 USA/CA</option><option value="+52">+52 MX</option><option value="+501">+501 BZ</option>
+          <option value="+502">+502 GT</option><option value="+503" selected>+503 SV</option><option value="+504">+504 HN</option>
+          <option value="+505">+505 NI</option><option value="+506">+506 CR</option><option value="+507">+507 PA</option>
+          <option value="+54">+54 AR</option><option value="+55">+55 BR</option><option value="+56">+56 CL</option>
+          <option value="+57">+57 CO</option><option value="+58">+58 VE</option><option value="+51">+51 PE</option>
+        </select>
+        <input type="tel" id="reg-tel" placeholder="WhatsApp" style="width:55%;">
+      </div>
+      <select id="rol"><option value="cliente">Cliente</option><option value="driver">Conductor</option></select>
+      <div id="driverFields" style="display:none;">
+        <input type="text" id="placa" placeholder="Placa del vehiculo">
+        <input type="text" id="marca" placeholder="Marca"><input type="text" id="modelo" placeholder="Modelo">
+        <input type="number" id="anio" placeholder="Anio">
+        <label>Licencia de Conducir</label><input type="file" id="licencia" accept="image/*">
+        <label>Antecedentes Penales</label><input type="file" id="penales" accept="image/*">
+        <label>Solvencia Policial</label><input type="file" id="solvencia" accept="image/*">
+        <label>Foto de Placa</label><input type="file" id="fotoPlaca" accept="image/*">
+        <label>Foto Vehiculo 1</label><input type="file" id="fotoCarro1" accept="image/*">
+        <label>Foto Vehiculo 2</label><input type="file" id="fotoCarro2" accept="image/*">
+        <label>Foto Vehiculo 3</label><input type="file" id="fotoCarro3" accept="image/*">
+      </div>
+    </div>
+    <div class="loader" id="loader">Procesando...</div>
+    <button class="btn" id="authBtn">INGRESAR</button>
+    <button class="btn-blue" id="btnToggleRegister" style="margin-top:8px;">REGISTRARSE</button>
+  </div>
+</div>
+
+<!-- CLIENTE -->
+<div id="clienteSection" class="section">
+  <div id="map"></div>
+  <div class="card">
+    <div class="card-title">SOLICITAR VIAJE</div>
+    <div class="estado-badge" id="estadoBadge"></div>
+    <div class="timer-wrap" id="timerWrap">
+      <div class="timer-circle">
+        <svg width="54" height="54" viewBox="0 0 54 54">
+          <circle class="timer-circle-bg" cx="27" cy="27" r="22"/>
+          <circle class="timer-circle-prog" id="timerProg" cx="27" cy="27" r="22"/>
+        </svg>
+        <div class="timer-num" id="timerNum">200</div>
+      </div>
+      <div class="timer-text">
+        <div class="timer-text-title" id="timerTitle">BUSCANDO CONDUCTORES</div>
+        <div class="timer-text-sub" id="timerSub">Los conductores pueden enviarte propuestas durante este tiempo</div>
+      </div>
+    </div>
+    <div class="ofertas-contador" id="ofertasContador"></div>
+    <button class="btn-blue" id="btnGPS">USAR MI UBICACION GPS</button>
+    <input id="origen" placeholder="Origen"><input id="destino" placeholder="Destino">
+    <div class="grid2">
+      <div><label>Personas</label><input type="number" id="personas" value="1" min="1"></div>
+      <div><label>Bebes</label><input type="number" id="bebes" value="0" min="0"></div>
+      <div><label>Mascotas</label><input type="number" id="mascotas" value="0" min="0"></div>
+      <div><label>Carga KG</label><input type="number" id="carga" value="0" min="0"></div>
+    </div>
+    <textarea id="notas" placeholder="Notas extras..."></textarea>
+    <div style="margin-top:10px;background:var(--card2);border-radius:10px;padding:10px;">
+      <div class="stat-row"><span class="stat-label">Distancia</span><span class="stat-val" id="distancia">-</span></div>
+      <div class="stat-row"><span class="stat-label">Tiempo</span><span class="stat-val" id="tiempo">-</span></div>
+      <div class="stat-row"><span class="stat-label">Precio app</span><span class="stat-val" id="precio">-</span></div>
+    </div>
+    <label>Tu oferta ($)</label><input type="number" id="ofertaCliente" placeholder="Ingresa tu oferta">
+    <button class="btn" id="btnCalcular">CALCULAR RUTA</button>
+    <button class="btn" id="btnPublicar" style="margin-top:6px;">PUBLICAR VIAJE</button>
+    <button class="btn-red" id="btnCancelarViajePublicado" style="margin-top:6px;display:none;">CANCELAR VIAJE PUBLICADO</button>
+    <!-- DEBUG BOX — visible durante pruebas -->
+    <div id="debugOfertas" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:10px;margin-top:8px;font-size:11px;color:#4caf50;font-family:monospace;max-height:120px;overflow-y:auto;"></div>
+  </div>
+
+  <!-- Chat activo cliente -->
+  <div class="card" id="chatCardCliente" style="display:none;">
+    <div class="card-title">VIAJE EN CURSO</div>
+    <div class="chat-header-box">
+      <div class="avatars">
+        <div class="avatar-item"><img id="cliChatFotoCli" src="" alt=""><div class="avatar-name" id="cliChatNombreCli"></div><div class="avatar-role" style="color:var(--g);">Cliente</div></div>
+        <div style="font-size:26px;">✕</div>
+        <div class="avatar-item"><img id="cliChatFotoDrv" src="" alt="" style="border:2px solid var(--orange);"><div class="avatar-name" id="cliChatNombreDrv"></div><div class="avatar-role" style="color:var(--orange);">Conductor</div></div>
+      </div>
+      <div class="vehicle-tag"><div class="vname" id="cliChatVehiculo">-</div><div class="vplaca" id="cliChatPlaca">-</div></div>
+    </div>
+    <div class="map-info">
+      <div class="map-info-item"><div class="mi-val" id="cliDistKm">-</div><div class="mi-label">KM conductor</div></div>
+      <div class="map-info-item"><div class="mi-val" id="cliEta">-</div><div class="mi-label">min llegada</div></div>
+      <div class="map-info-item"><div class="mi-val" id="cliDistViaje">-</div><div class="mi-label">KM viaje</div></div>
+    </div>
+    <div class="map-legend">
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff6d00;"></div>Conductor</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#00e676;"></div>Tu ubicacion / Origen</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff1744;"></div>Destino</div>
+    </div>
+    <div id="chatMapCliente"></div>
+    <div class="chat-box" id="chatBox"></div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <input id="chatInput" placeholder="Escribe un mensaje..." style="margin-top:0;">
+      <button class="btn btn-sm" id="btnEnviarMensaje" style="width:auto;padding:11px 16px;">Enviar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <button class="btn" id="btnFinalizarCliente" style="margin-top:0;">FINALIZAR</button>
+      <button class="btn-red" id="btnCancelarCliente" style="margin-top:0;">CANCELAR</button>
+    </div>
+  </div>
+  <div class="email-soporte">Soporte: <a href="mailto:atencionalclienteruncar@outlook.com">atencionalclienteruncar@outlook.com</a></div>
+</div>
+
+<!-- DRIVER -->
+<div id="driverSection" class="section">
+  <div class="asignado-msg" id="asignadoMsg">El viaje ha sido asignado a otro conductor.</div>
+  <div class="card"><div class="card-title">VIAJES DISPONIBLES</div><div id="viajes"></div></div>
+
+  <!-- Chat activo driver -->
+  <div class="card" id="chatCardDriver" style="display:none;">
+    <div class="card-title">VIAJE EN CURSO</div>
+    <div class="chat-header-box">
+      <div class="avatars">
+        <div class="avatar-item"><img id="drvChatFotoCli" src="" alt=""><div class="avatar-name" id="drvChatNombreCli"></div><div class="avatar-role" style="color:var(--g);">Cliente</div></div>
+        <div style="font-size:26px;">✕</div>
+        <div class="avatar-item"><img id="drvChatFotoDrv" src="" alt="" style="border:2px solid var(--orange);"><div class="avatar-name" id="drvChatNombreDrv"></div><div class="avatar-role" style="color:var(--orange);">Conductor</div></div>
+      </div>
+      <div class="vehicle-tag"><div class="vname" id="drvChatVehiculo">-</div><div class="vplaca" id="drvChatPlaca">-</div></div>
+    </div>
+    <div class="map-info">
+      <div class="map-info-item"><div class="mi-val" id="drvDistKm">-</div><div class="mi-label">KM al cliente</div></div>
+      <div class="map-info-item"><div class="mi-val" id="drvEta">-</div><div class="mi-label">min llegada</div></div>
+      <div class="map-info-item"><div class="mi-val" id="drvDistViaje">-</div><div class="mi-label">KM viaje</div></div>
+    </div>
+    <div class="map-legend">
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff6d00;"></div>Tu posicion</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#00e676;"></div>Cliente / Origen</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#ff1744;"></div>Destino</div>
+    </div>
+    <div id="chatMapDriver"></div>
+    <div class="chat-box" id="driverChatBox"></div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <input id="driverChatInput" placeholder="Escribe un mensaje..." style="margin-top:0;">
+      <button class="btn btn-sm" id="btnDriverEnviarMensaje" style="width:auto;padding:11px 16px;">Enviar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <button class="btn" id="btnFinalizarDriver" style="margin-top:0;">FINALIZAR</button>
+      <button class="btn-red" id="btnCancelarDriver" style="margin-top:0;">CANCELAR</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">MIS GANANCIAS (5 DIAS)</div>
+    <div id="gananciasBox"></div>
+    <div style="margin-top:10px;background:var(--card2);border-radius:10px;padding:12px;">
+      <div class="stat-row"><span class="stat-label">Total Bruto</span><span class="stat-val" id="bruto">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Comision App (8%)</span><span class="stat-val" id="comision" style="color:var(--red);">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Tu Ganancia Neta</span><span class="stat-val" id="neto">$0.00</span></div>
+    </div>
+    <div class="card-title" style="margin-top:14px;">PAGO DE COMISION</div>
+    <a href="https://link.cubopago.com/JfhPl4xXSkAr" target="_blank" class="link-pago">PAGAR COMISION APP</a>
+  </div>
+  <div class="card"><div class="card-title">MENSAJES GENERALES</div><div class="chat-box" id="mensajesGeneralesDriver" style="height:150px;"></div></div>
+  <div class="email-soporte">Soporte: <a href="mailto:atencionalclienteruncar@outlook.com">atencionalclienteruncar@outlook.com</a></div>
+</div>
+
+<!-- ADMIN -->
+<div id="adminSection" class="section">
+  <div class="card">
+    <div class="card-title">PANEL ADMINISTRACION</div>
+    <div class="card-title" style="font-size:14px;margin-top:4px;">GANANCIAS GLOBALES</div>
+    <div id="adminGananciasBox"></div>
+    <div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:12px;">
+      <div class="stat-row"><span class="stat-label">Total Bruto Global</span><span class="stat-val" id="adminBruto">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Comision App 8%</span><span class="stat-val" id="adminComision" style="color:var(--red);">$0.00</span></div>
+    </div>
+    <div class="card-title" style="font-size:14px;">USUARIOS</div>
+    <div id="adminUsuariosBox" style="overflow-x:auto;"></div>
+    <div class="card-title" style="font-size:14px;margin-top:14px;">MENSAJE A TODOS LOS DRIVERS</div>
+    <textarea id="adminMsgTxt" placeholder="Escribe el mensaje..." style="min-height:70px;"></textarea>
+    <button class="btn" id="btnAdminEnviarMsg">ENVIAR MENSAJE GLOBAL</button>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- MODAL DRIVER -->
+<div class="modal" id="modalDriver">
+  <div class="modal-box">
+    <div class="modal-title">SOLICITUD DE VIAJE</div>
+    <div id="driverOfertaContenido"></div>
+    <div class="oferta-estado-box" id="modalDriverEstado"></div>
+    <div style="background:rgba(255,109,0,.08);border:1px solid var(--orange);border-radius:10px;padding:12px;margin-top:10px;">
+      <div style="font-family:Rajdhani,sans-serif;font-size:13px;color:var(--orange);font-weight:700;letter-spacing:.5px;margin-bottom:6px;">ENVIAR MI CONTRA-OFERTA</div>
+      <input type="number" id="contraOfertaDriver" placeholder="Mi precio propuesto ($)" style="margin-top:0;">
+      <button class="btn-blue" id="btnContraOfertar" style="margin-top:8px;">ENVIAR OFERTA AL CLIENTE</button>
+      <div style="font-size:11px;color:var(--sub);margin-top:6px;text-align:center;">Maximo 3 ofertas por viaje</div>
+    </div>
+    <div class="chat-box" id="driverChatPrivado" style="margin-top:8px;height:140px;"></div>
+    <div style="display:flex;gap:6px;margin-top:6px;">
+      <input id="driverChatInput2" placeholder="Mensaje al cliente..." style="margin-top:0;">
+      <button class="btn btn-sm" id="btnDrvMsgPriv" style="width:auto;padding:10px 14px;">Enviar</button>
+    </div>
+    <button class="btn-red" id="btnRechazarViaje" style="margin-top:10px;">CERRAR Y NO PARTICIPAR</button>
+  </div>
+</div>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
+import{getFirestore,collection,addDoc,setDoc,doc,getDoc,getDocs,updateDoc,onSnapshot,query,orderBy,where,limit,deleteField}from"https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
+import{getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
+
+const app=initializeApp({apiKey:"AIzaSyAyRrBUmw4OEzS7EmvK_XmDk6Z5rrjLC3A",authDomain:"runcar-6eda0.firebaseapp.com",projectId:"runcar-6eda0",storageBucket:"runcar-6eda0.firebasestorage.app",messagingSenderId:"152627344672",appId:"1:152627344672:web:b420d1c8cbb670069b9345"});
+const db=getFirestore(app);
+const auth=getAuth(app);
+
+let miUid="",miRol="",miNombre="",miFoto="",isRegister=false;
+let map,chatMapCli,chatMapDrv;
+let markerOrigen,markerDestino,routeLine;
+let markerDrvLive=null,markerCliLive=null,markerDestinoChat=null;
+let currentChatTrip=null,viajeActivoId="",chatClienteAbierto=false,contadorOfertas=0;
+let miLat=null,miLng=null,viajeOrigenCoords=null,viajeDestinoCoords=null;
+let unsubEstadoViajes=null,unsubChatPrivado=null,unsubViajeModal=null,unsubOfertasCol=null;
+
+// Map para trackear listeners de cards de viajes disponibles (driver)
+const viajesCardListeners=new Map();
+
+// Cola de ofertas pendientes
+const ofertasQueue=[];
+const ofertasMostradas=new Set();
+let ofertaToastActual=null;
+let mostrandoOferta=false;
+
+// TIMERS
+const TIMER_PUB_DUR=200;
+const TIMER_OFERTA_DUR=150;
+const CIRC=2*Math.PI*22;
+let timerPubInterval=null,timerPubSeg=0;
+let timerOfertaInterval=null,timerOfertaSeg=0;
+
+// ---- HELPERS ----
+const gi=id=>document.getElementById(id);
+const sv=id=>gi(id)?.value?.trim()||"";
+const sf=id=>gi(id)?.files?.[0]||null;
+function toast(msg,dur=3500){const t=gi("toast");t.innerText=msg;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",dur);}
+function showLoader(v){gi("loader").style.display=v?"block":"none";}
+
+// Helper para habilitar/deshabilitar boton publicar
+function setPublicarHabilitado(habilitado){
+  const btn=gi("btnPublicar");
+  btn.disabled=!habilitado;
+  btn.innerText=habilitado?"PUBLICAR VIAJE":"VIAJE ACTIVO (CANCELA PRIMERO)";
+}
+
+// ---- DEBUG LOG (cliente) ----
+function debugLog(msg){
+  const box=gi("debugOfertas");if(!box)return;
+  box.style.display="block";
+  const d=new Date();const ts=d.getHours()+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+  box.innerHTML+="<div>["+ts+"] "+msg+"</div>";box.scrollTop=box.scrollHeight;
+}
+
+// ---- TIMER PUBLICACION ----
+function iniciarTimerPub(){
+  detenerTimerPub();timerPubSeg=TIMER_PUB_DUR;uiTimerPub(timerPubSeg);
+  gi("timerWrap").classList.add("visible");
+  timerPubInterval=setInterval(()=>{timerPubSeg--;uiTimerPub(timerPubSeg);if(timerPubSeg<=0){detenerTimerPub();onTimerPubExpirado();}},1000);
+}
+function detenerTimerPub(){
+  if(timerPubInterval){clearInterval(timerPubInterval);timerPubInterval=null;}
+  gi("timerWrap").classList.remove("visible","urgent-pulse");
+}
+function uiTimerPub(s){
+  const p=gi("timerProg"),n=gi("timerNum"),t=gi("timerTitle"),w=gi("timerWrap");
+  p.style.strokeDashoffset=CIRC*(1-s/TIMER_PUB_DUR);n.innerText=s;
+  const u=s<=30;
+  p.classList.toggle("urgent",u);n.classList.toggle("urgent",u);t.classList.toggle("urgent",u);w.classList.toggle("urgent-pulse",u&&s>0);
+  t.innerText=u&&s>0?"TIEMPO CASI AGOTADO":"BUSCANDO CONDUCTORES";
+  gi("timerSub").innerText=u&&s>0?"El viaje se cerrara en "+s+"s":"Los conductores pueden enviarte propuestas durante este tiempo";
+}
+async function onTimerPubExpirado(){
+  if(!currentChatTrip)return;
+  const vs=await getDoc(doc(db,"viajes",currentChatTrip));
+  if(!vs.exists())return;
+  const v=vs.data();
+  if(v.estado==="aceptado"||v.estado==="finalizado"||v.estado==="cancelado")return;
+  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"tiempo_agotado"});
+}
+
+// ---- TIMER OFERTA (150s) ----
+function iniciarTimerOferta(){
+  detenerTimerOferta();timerOfertaSeg=TIMER_OFERTA_DUR;uiTimerOferta(timerOfertaSeg);
+  timerOfertaInterval=setInterval(()=>{timerOfertaSeg--;uiTimerOferta(timerOfertaSeg);if(timerOfertaSeg<=0){detenerTimerOferta();onTimerOfertaExpirado();}},1000);
+}
+function detenerTimerOferta(){
+  if(timerOfertaInterval){clearInterval(timerOfertaInterval);timerOfertaInterval=null;}
+  gi("timerOfertasWrap").classList.remove("urgent-pulse");
+}
+function uiTimerOferta(s){
+  const p=gi("timerOfertasProg"),n=gi("timerOfertasNum"),t=gi("timerOfertasTitle"),w=gi("timerOfertasWrap");
+  p.style.strokeDashoffset=CIRC*(1-s/TIMER_OFERTA_DUR);n.innerText=s;
+  const u=s<=30;
+  p.classList.toggle("urgent",u);n.classList.toggle("urgent",u);t.classList.toggle("urgent",u);w.classList.toggle("urgent-pulse",u&&s>0);
+  t.innerText=u&&s>0?"SE ACABA EL TIEMPO":"TIEMPO PARA DECIDIR";
+  gi("timerOfertasSub").innerText=u&&s>0?"Solo "+s+"s para aceptar o rechazar":"Acepta o rechaza esta oferta antes de que expire";
+}
+
+async function onTimerOfertaExpirado(){
+  if(!ofertaToastActual||!currentChatTrip)return;
+  const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
+  const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
+  await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"}).catch(()=>{});
+  await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId}).catch(()=>{});
+  ocultarOfertaToastActual();
+  mostrandoOferta=false;
+  if(ofertasQueue.length>0){
+    toast("Tiempo agotado para esa oferta. Mostrando siguiente...",3000);
+    mostrarSiguienteOferta(viajeId,origVal);
+    return;
+  }
+  debugLog("Timer expirado y sin mas ofertas. Cancelando viaje...");
+  toast("No se acepto ninguna oferta. Viaje cancelado. Puedes publicar de nuevo.",6000);
+  try{
+    const vs=await getDoc(doc(db,"viajes",viajeId));
+    if(vs.exists()){
+      const vd=vs.data();
+      if(vd.estado!=="aceptado"&&vd.estado!=="finalizado"&&vd.estado!=="cancelado"){
+        await updateDoc(doc(db,"viajes",viajeId),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"sin_aceptacion"});
+      }
     }
+  }catch(e){console.error("Error cancelando viaje:",e);}
+  cerrarChats();
+}
 
-    private_user = {
+gi("btnLogout").addEventListener("click",async()=>{if(!confirm("Cerrar sesion?"))return;detenerTimerPub();detenerTimerOferta();await signOut(auth);location.reload();});
 
-        **public_user,
+async function toBase64(file,maxPx=400,q=0.65){
+  if(!file)return"";
+  const du=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{let w=img.width,h=img.height;if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);res(c.toDataURL("image/jpeg",q));};
+    img.onerror=()=>res(du);img.src=du;
+  });
+}
+async function reverseGeocode(lat,lng){
+  try{const r=await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat="+lat+"&lon="+lng+"&zoom=16");const d=await r.json();return d.display_name||lat.toFixed(4)+","+lng.toFixed(4);}catch{return lat.toFixed(4)+","+lng.toFixed(4);}
+}
+async function geocode(txt){
+  const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(txt));
+  const d=await r.json();if(!d.length)throw new Error("Direccion no encontrada");
+  return{lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};
+}
+function distKm(a,b,c,d){const R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
 
-        "email": body.email,
-        "password_hash": password_hash
+function mkIcon(color,label=""){
+  return L.divIcon({
+    className:"",
+    html:"<div style='background:"+color+";border:3px solid #fff;border-radius:50% 50% 50% 0;width:28px;height:28px;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.5);'></div>"+(label?"<div style='position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:9px;padding:2px 5px;border-radius:4px;white-space:nowrap;font-family:Rajdhani,sans-serif;font-weight:700;'>"+label+"</div>":""),
+    iconSize:[28,28],iconAnchor:[14,28]
+  });
+}
+
+function setupNav(rol){
+  gi("mainNav").style.display="flex";
+  const tabs=gi("navTabs");tabs.innerHTML="";
+  const label=rol==="cliente"?"Inicio":rol==="driver"?"Viajes":"Admin";
+  const sec=rol==="cliente"?"clienteSection":rol==="driver"?"driverSection":"adminSection";
+  tabs.innerHTML="<button class='nav-tab active' data-sec='"+sec+"'>"+label+"</button>";
+  tabs.querySelectorAll(".nav-tab").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+      gi(btn.dataset.sec).classList.add("active");
+      tabs.querySelectorAll(".nav-tab").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+}
+
+function initMap(){
+  if(map)return;
+  map=L.map("map").setView([13.6929,-89.2182],13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+  markerOrigen=L.marker([13.6929,-89.2182],{draggable:true,icon:mkIcon("#00e676","Origen")}).addTo(map);
+  markerDestino=L.marker([13.7029,-89.2282],{draggable:true,icon:mkIcon("#ff1744","Destino")}).addTo(map);
+  markerOrigen.on("dragend",async e=>{const{lat,lng}=e.target.getLatLng();gi("origen").value=await reverseGeocode(lat,lng);});
+  markerDestino.on("dragend",async e=>{const{lat,lng}=e.target.getLatLng();gi("destino").value=await reverseGeocode(lat,lng);});
+}
+
+function initChatMapCli(v){
+  if(!chatMapCli){
+    chatMapCli=L.map("chatMapCliente").setView([13.6929,-89.2182],13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapCli);
+  }
+  if(v.clienteLat&&!markerCliLive){
+    markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676","Tu ubicacion")}).addTo(chatMapCli);
+  }
+  if(viajeDestinoCoords&&!markerDestinoChat){
+    markerDestinoChat=L.marker([viajeDestinoCoords.lat,viajeDestinoCoords.lng],{icon:mkIcon("#ff1744","Destino")}).addTo(chatMapCli);
+  }
+  if(viajeOrigenCoords&&viajeDestinoCoords){
+    dibujarRutaChat(chatMapCli,viajeOrigenCoords,viajeDestinoCoords,"#00e676","rutaODCli");
+  }
+}
+
+function initChatMapDrv(v){
+  if(!chatMapDrv){
+    chatMapDrv=L.map("chatMapDriver").setView([13.6929,-89.2182],13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(chatMapDrv);
+  }
+  if(v.clienteLat&&!markerCliLive){
+    markerCliLive=L.marker([v.clienteLat,v.clienteLng],{icon:mkIcon("#00e676","Cliente")}).addTo(chatMapDrv);
+  }
+  if(viajeDestinoCoords&&!markerDestinoChat){
+    markerDestinoChat=L.marker([viajeDestinoCoords.lat,viajeDestinoCoords.lng],{icon:mkIcon("#ff1744","Destino")}).addTo(chatMapDrv);
+  }
+  if(miLat){
+    if(markerDrvLive)markerDrvLive.setLatLng([miLat,miLng]);
+    else markerDrvLive=L.marker([miLat,miLng],{icon:mkIcon("#ff6d00","Tu posicion")}).addTo(chatMapDrv);
+    chatMapDrv.setView([miLat,miLng],14);
+    if(v.clienteLat)dibujarRutaChat(chatMapDrv,{lat:miLat,lng:miLng},{lat:v.clienteLat,lng:v.clienteLng},"#ff6d00","rutaDrvCli");
+  }
+  if(viajeOrigenCoords&&viajeDestinoCoords){
+    dibujarRutaChat(chatMapDrv,viajeOrigenCoords,viajeDestinoCoords,"#00e676","rutaODDrv");
+  }
+}
+
+const _rutasCache={};
+async function dibujarRutaChat(m,o,d,color,key){
+  try{
+    const cacheKey=key+"_"+o.lat+"_"+o.lng+"_"+d.lat+"_"+d.lng;
+    if(_rutasCache[cacheKey])return;
+    _rutasCache[cacheKey]=true;
+    const r=await fetch("https://router.project-osrm.org/route/v1/driving/"+o.lng+","+o.lat+";"+d.lng+","+d.lat+"?overview=full&geometries=geojson");
+    const data=await r.json();if(!data.routes?.length)return;
+    const isDash=color==="#ff6d00";
+    L.geoJSON(data.routes[0].geometry,{style:{color,weight:4,opacity:.85,dashArray:isDash?"10,6":"none"}}).addTo(m);
+    m.fitBounds(L.geoJSON(data.routes[0].geometry).getBounds(),{padding:[40,40]});
+  }catch(e){console.warn("Ruta:",e);}
+}
+
+function iniciarRastreoDriver(){
+  if(!navigator.geolocation)return;
+  navigator.geolocation.watchPosition(async pos=>{
+    miLat=pos.coords.latitude;miLng=pos.coords.longitude;
+    if(currentChatTrip)await updateDoc(doc(db,"viajes",currentChatTrip),{driverLat:miLat,driverLng:miLng}).catch(()=>{});
+    if(chatMapDrv&&markerDrvLive){
+      markerDrvLive.setLatLng([miLat,miLng]);
+      chatMapDrv.setView([miLat,miLng],14);
     }
+  },e=>console.warn("GPS",e),{enableHighAccuracy:true,maximumAge:4000});
+}
 
-    if body.rol == "driver":
-
-        public_user.update({
-
-            "placa": body.placa,
-            "marca": body.marca,
-            "modelo": body.modelo,
-            "anio": body.anio
-        })
-
-        private_user.update({
-
-            "placa": body.placa,
-            "marca": body.marca,
-            "modelo": body.modelo,
-            "anio": body.anio,
-
-            "licencia": body.licencia,
-            "penales": body.penales,
-            "solvencia": body.solvencia,
-
-            "foto_placa": body.foto_placa,
-
-            "foto_carro1": body.foto_carro1,
-            "foto_carro2": body.foto_carro2,
-            "foto_carro3": body.foto_carro3
-        })
-
-    db.collection(
-        "usuarios_publicos"
-    ).document(uid).set(public_user)
-
-    db.collection(
-        "usuarios_privados"
-    ).document(uid).set(private_user)
-
-    token = create_access_token({
-
-        "sub": uid,
-        "rol": body.rol
-    })
-
-    logger.info(f"Usuario registrado: {uid}")
-
-    return {
-
-        "access_token": token,
-        "token_type": "bearer",
-        "uid": uid,
-        "rol": body.rol
+function escucharPosDrv(id){
+  onSnapshot(doc(db,"viajes",id),snap=>{
+    const v=snap.data();if(!v||!v.driverLat)return;
+    if(chatMapCli){
+      if(markerDrvLive)markerDrvLive.setLatLng([v.driverLat,v.driverLng]);
+      else markerDrvLive=L.marker([v.driverLat,v.driverLng],{icon:mkIcon("#ff6d00","Conductor")}).addTo(chatMapCli);
     }
-
-# ═══════════════════════════════════════════════════════════════
-# LOGIN
-# ═══════════════════════════════════════════════════════════════
-
-@app.post(
-    "/auth/login",
-    response_model=LoginResponse,
-    tags=["Auth"]
-)
-@limiter.limit("5/minute")
-async def login(
-    request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends()
-):
-
-    docs = (
-        db.collection("usuarios_privados")
-        .where("email", "==", form_data.username)
-        .limit(1)
-        .get()
-    )
-
-    if not docs:
-        raise HTTPException(
-            401,
-            "Credenciales inválidas"
-        )
-
-    user = docs[0].to_dict()
-
-    if not verify_password(
-        form_data.password,
-        user["password_hash"]
-    ):
-        raise HTTPException(
-            401,
-            "Credenciales inválidas"
-        )
-
-    token = create_access_token({
-
-        "sub": user["uid"],
-        "rol": user["rol"]
-    })
-
-    logger.info(f"Login exitoso: {user['uid']}")
-
-    return {
-
-        "access_token": token,
-        "token_type": "bearer",
-        "uid": user["uid"],
-        "rol": user["rol"]
+    if(v.clienteLat){const km=distKm(v.driverLat,v.driverLng,v.clienteLat,v.clienteLng);gi("cliDistKm").innerText=km.toFixed(1);gi("cliEta").innerText=Math.ceil(km/0.5);}
+    if(chatMapCli&&v.clienteLat){
+      dibujarRutaChat(chatMapCli,{lat:v.driverLat,lng:v.driverLng},{lat:v.clienteLat,lng:v.clienteLng},"#ff6d00","rutaDrvCliRT_"+Date.now());
     }
+  });
+}
 
-# ═══════════════════════════════════════════════════════════════
-# PERFIL
-# ═══════════════════════════════════════════════════════════════
+// AUTH
+gi("btnToggleRegister").addEventListener("click",()=>{isRegister=!isRegister;gi("registerFields").style.display=isRegister?"block":"none";gi("authBtn").innerText=isRegister?"CREAR CUENTA":"INGRESAR";});
+gi("rol").addEventListener("change",e=>{gi("driverFields").style.display=e.target.value==="driver"?"block":"none";});
 
-@app.get(
-    "/auth/me",
-    tags=["Auth"]
-)
-async def me(
-    user: dict = Depends(get_current_user)
-):
+gi("authBtn").addEventListener("click",async()=>{
+  const email=sv("email"),pass=sv("password");
+  if(!email||!pass){alert("Completa email y contrasena");return;}
+  showLoader(true);
+  if(!isRegister){
+    try{await signInWithEmailAndPassword(auth,email,pass);}
+    catch(e){alert("Correo o contrasena incorrecta");showLoader(false);return;}
+    showLoader(false);return;
+  }
+  try{
+    const nombre=sv("nombre"),tel=sv("reg-prefijo")+sv("reg-tel"),rol=sv("rol");
+    if(!nombre){alert("Ingresa nombre");showLoader(false);return;}
+    if(rol==="admin"){alert("No es posible registrarse como administrador");showLoader(false);return;}
+    const cred=await createUserWithEmailAndPassword(auth,email,pass);
+    await setDoc(doc(db,"usuarios",cred.user.uid),{
+      uid:cred.user.uid,nombre,email,telefono:tel,rol,
+      placa:sv("placa"),marca:sv("marca"),modelo:sv("modelo"),anio:sv("anio"),
+      fotoPerfil:await toBase64(sf("fotoPerfil")),
+      licencia:await toBase64(sf("licencia")),penales:await toBase64(sf("penales")),
+      solvencia:await toBase64(sf("solvencia")),fotoPlaca:await toBase64(sf("fotoPlaca")),
+      fotoCarro1:await toBase64(sf("fotoCarro1")),fotoCarro2:await toBase64(sf("fotoCarro2")),fotoCarro3:await toBase64(sf("fotoCarro3")),
+      estado:"activo",timestamp:new Date().toISOString()
+    });
+    toast("Cuenta creada correctamente");
+  }catch(e){console.error(e);alert(e.message);}
+  showLoader(false);
+});
 
-    user.pop("password_hash", None)
+onAuthStateChanged(auth,async user=>{
+  if(!user)return;
+  miUid=user.uid;
+  const snap=await getDoc(doc(db,"usuarios",miUid));
+  if(!snap.exists())return;
+  const data=snap.data();
+  miRol=data.rol;miNombre=data.nombre;miFoto=data.fotoPerfil||"";
+  if(data.estado==="inactivo"){alert("Tu cuenta esta inactiva.");return;}
+  gi("authSection").classList.remove("active");
+  setupNav(miRol);
+  if(miRol==="cliente"){
+    gi("clienteSection").classList.add("active");
+    initMap();
+    navigator.geolocation?.getCurrentPosition(async pos=>{
+      miLat=pos.coords.latitude;miLng=pos.coords.longitude;
+      markerOrigen.setLatLng([miLat,miLng]);map.setView([miLat,miLng],14);
+      gi("origen").value=await reverseGeocode(miLat,miLng);
+    });
+    escucharEstadoViajesCliente();
+  }else if(miRol==="driver"){
+    gi("driverSection").classList.add("active");
+    iniciarRastreoDriver();
+    escucharViajesDisponibles();escucharMensajesGenerales();cargarGananciasDriver();
+  }else if(miRol==="admin"){
+    gi("adminSection").classList.add("active");
+    cargarAdminData();
+  }
+});
 
-    return user
+gi("btnGPS").addEventListener("click",()=>{
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    miLat=pos.coords.latitude;miLng=pos.coords.longitude;
+    markerOrigen.setLatLng([miLat,miLng]);map.flyTo([miLat,miLng],15);
+    gi("origen").value=await reverseGeocode(miLat,miLng);
+  },()=>alert("GPS no disponible"));
+});
 
-# ═══════════════════════════════════════════════════════════════
-# VIAJES
-# ═══════════════════════════════════════════════════════════════
+gi("btnCalcular").addEventListener("click",async()=>{
+  try{
+    const or=sv("origen"),de=sv("destino");
+    if(!or||!de){alert("Completa origen y destino");return;}
+    const o=await geocode(or),d=await geocode(de);
+    viajeOrigenCoords=o;viajeDestinoCoords=d;
+    markerOrigen.setLatLng([o.lat,o.lng]);markerDestino.setLatLng([d.lat,d.lng]);
+    map.fitBounds([[o.lat,o.lng],[d.lat,d.lng]],{padding:[30,30]});
+    const res=await fetch("https://router.project-osrm.org/route/v1/driving/"+o.lng+","+o.lat+";"+d.lng+","+d.lat+"?overview=full&geometries=geojson");
+    const data=await res.json();if(!data.routes.length){alert("Ruta no encontrada");return;}
+    const route=data.routes[0],km=route.distance/1000,mins=Math.ceil(route.duration/60);
+    const precio=km<=1?1:km<=2?2:km<=3?3:(3+km*0.30);
+    gi("distancia").innerText=km.toFixed(2)+" KM";gi("tiempo").innerText=mins+" min";gi("precio").innerText="$"+precio.toFixed(2);
+    gi("ofertaCliente").value=precio.toFixed(2);
+    if(routeLine)map.removeLayer(routeLine);
+    routeLine=L.geoJSON(route.geometry,{style:{color:"#00e676",weight:5,opacity:.8}}).addTo(map);
+  }catch(e){console.error(e);alert("Error calculando ruta");}
+});
 
-@app.post(
-    "/viajes",
-    tags=["Viajes"]
-)
-async def publicar_viaje(
-    body: PublicarViajeRequest,
-    user: dict = Depends(require_role("cliente"))
-):
+// ---- PUBLICAR VIAJE — con bloqueo de duplicados ----
+gi("btnPublicar").addEventListener("click",async()=>{
+  // NUEVO: Bloquear publicacion si ya hay viaje activo
+  if(currentChatTrip){
+    toast("Ya tienes un viaje publicado activo. Cancelalo primero para publicar uno nuevo.",5000);
+    return;
+  }
 
-    viaje = {
+  const oferta=parseFloat(gi("ofertaCliente").value);
+  if(isNaN(oferta)){alert("Ingresa tu oferta");return;}
+  if(!sv("origen")||!sv("destino")){alert("Completa origen y destino");return;}
 
-        "clienteId": user["uid"],
-        "clienteNombre": user["nombre"],
+  // reset estado
+  chatClienteAbierto=false;
+  ofertasMostradas.clear();ofertasQueue.length=0;ofertaToastActual=null;mostrandoOferta=false;
+  ocultarOfertaToastActual();
+  if(gi("chatCardCliente"))gi("chatCardCliente").style.display="none";
+  if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
 
-        "origen": body.origen,
-        "destino": body.destino,
+  const viaje=await addDoc(collection(db,"viajes"),{
+    clienteId:miUid,clienteNombre:miNombre,clienteFoto:miFoto,
+    clienteLat:miLat||null,clienteLng:miLng||null,
+    origenLat:viajeOrigenCoords?.lat||null,origenLng:viajeOrigenCoords?.lng||null,
+    destinoLat:viajeDestinoCoords?.lat||null,destinoLng:viajeDestinoCoords?.lng||null,
+    origen:sv("origen"),destino:sv("destino"),
+    personas:Number(sv("personas")),bebes:Number(sv("bebes")),mascotas:Number(sv("mascotas")),carga:Number(sv("carga")),
+    notas:sv("notas"),distancia:gi("distancia").innerText,tiempo:gi("tiempo").innerText,precioApp:gi("precio").innerText,
+    ofertaOriginal:oferta,ofertaActual:oferta,estado:"buscando",timestamp:new Date().toISOString()
+  });
 
-        "personas": body.personas,
-        "bebes": body.bebes,
-        "mascotas": body.mascotas,
+  currentChatTrip=viaje.id;
+  console.log("[CLIENTE] Viaje publicado con ID:",viaje.id,"| oferta: $"+oferta);
+  debugLog("Viaje publicado: "+viaje.id.slice(-6)+" | $"+oferta);
 
-        "notas": body.notas,
+  setBadge("buscando");
+  // NUEVO: Deshabilitar boton publicar mientras haya viaje activo
+  setPublicarHabilitado(false);
+  gi("btnCancelarViajePublicado").style.display="";
+  iniciarTimerPub();
 
-        "ofertaOriginal": body.oferta_original,
-        "ofertaActual": body.oferta_original,
+  // Iniciar listener de ofertas inmediatamente
+  escucharOfertasSubcoleccion(viaje.id,oferta);
+  toast("Viaje publicado! Esperando conductores... (200s)");
+});
 
-        "estado": "buscando",
+gi("btnCancelarViajePublicado").addEventListener("click",async()=>{
+  if(!currentChatTrip){toast("No hay viaje publicado activo");return;}
+  if(!confirm("Cancelar el viaje publicado?"))return;
+  detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
+  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"cliente_cancelo"});
+});
 
-        "timestamp": datetime.utcnow().isoformat()
+function setBadge(estado){
+  const b=gi("estadoBadge");b.className="estado-badge";
+  if(!estado||estado==="finalizado"||estado==="cancelado"){b.style.display="none";return;}
+  if(estado==="buscando"){b.classList.add("estado-buscando");b.innerText="Buscando conductor...";}
+  else if(estado==="contraoferta"){b.classList.add("estado-ofertas");b.innerText="Tienes ofertas de conductores!";}
+  else if(estado==="aceptado"){b.classList.add("estado-aceptado");b.innerText="Viaje confirmado! Conductor en camino";}
+}
+
+// ---- VIAJES DISPONIBLES DRIVER con listener por card ----
+function escucharViajesDisponibles(){
+  viajesCardListeners.forEach(unsub=>unsub());
+  viajesCardListeners.clear();
+
+  onSnapshot(collection(db,"viajes"),snap=>{
+    const cont=gi("viajes");
+    const docs=[];snap.forEach(d=>docs.push(d));
+    docs.sort((a,b)=>{const ta=a.data().timestamp||"",tb=b.data().timestamp||"";return tb>ta?1:tb<ta?-1:0;});
+
+    cont.innerHTML="";
+    let hay=false;
+
+    docs.forEach(ds=>{
+      const v=ds.data();
+      if(v.estado!=="buscando"&&v.estado!=="contraoferta")return;
+      hay=true;
+      const pub=v.timestamp?new Date(v.timestamp):null;
+      const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_PUB_DUR;
+      const secsR=Math.max(0,TIMER_PUB_DUR-secsT);
+      const tc=secsR<=30?"var(--red)":"var(--orange)";
+      const div=document.createElement("div");
+      div.className="trip-card";
+      div.id="tripcard_"+ds.id;
+      div.innerHTML="<div style='display:flex;gap:10px;align-items:center;margin-bottom:8px;'><img src='"+v.clienteFoto+"' style='width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--g);'><div><div style='font-weight:700;font-size:15px;'>"+v.clienteNombre+"</div><div style='font-size:12px;color:var(--sub);'>"+v.origen+"</div><div style='font-size:12px;color:var(--sub);'>"+v.destino+"</div></div></div>"
+        +"<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;'><span class='badge badge-g'>$"+v.ofertaActual+"</span><span class='badge badge-b'>"+v.precioApp+"</span><span class='badge badge-y'>"+v.distancia+"</span><span id='timerbadge_"+ds.id+"' style='background:rgba(255,109,0,.15);border:1px solid "+tc+";color:"+tc+";display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;'>"+secsR+"s</span></div>"
+        +"<div style='font-size:12px;color:var(--sub);margin-bottom:8px;'>"+v.personas+" pers &nbsp;"+v.bebes+" bebes &nbsp;"+v.mascotas+" masc &nbsp;"+v.carga+"KG</div>"
+        +(v.notas?"<div style='font-size:12px;background:#1a1a1a;padding:6px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"")
+        +"<button class='btn' style='margin-top:0;'"+(secsR<=0?" disabled":"")+">"+(secsR<=0?"EXPIRADO":"VER Y ENVIAR OFERTA")+"</button>";
+      if(secsR>0)div.querySelector("button").addEventListener("click",()=>abrirModalDriver(ds.id));
+      cont.appendChild(div);
+
+      // Listener por cada viaje — eliminar card si cambia a cancelado/aceptado
+      if(!viajesCardListeners.has(ds.id)){
+        const unsub=onSnapshot(doc(db,"viajes",ds.id),docSnap=>{
+          const vv=docSnap.data();if(!vv)return;
+          const cardEl=gi("tripcard_"+ds.id);
+          if(vv.estado==="cancelado"||vv.estado==="finalizado"||vv.estado==="aceptado"){
+            if(cardEl)cardEl.remove();
+            if(viajeActivoId===ds.id&&gi("modalDriver").classList.contains("open")){
+              gi("modalDriver").classList.remove("open");
+              limpiarEstadoModal();
+              if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+              if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+              let msg="Este viaje ya no esta disponible.";
+              if(vv.estado==="cancelado"){
+                if(vv.motivoCancelacion==="tiempo_agotado")msg="El tiempo de este viaje expiro.";
+                else if(vv.motivoCancelacion==="cliente_cancelo")msg="El cliente cancelo este viaje.";
+                else if(vv.motivoCancelacion==="sin_aceptacion")msg="El cliente no acepto ninguna oferta.";
+                else msg="El viaje fue cancelado.";
+              }else if(vv.estado==="aceptado"&&vv.driverId!==miUid){
+                msg="Este viaje fue tomado por otro conductor.";
+              }
+              toast(msg,5000);
+            }
+            unsub();
+            viajesCardListeners.delete(ds.id);
+          }
+        });
+        viajesCardListeners.set(ds.id,unsub);
+      }
+    });
+
+    if(!hay)cont.innerHTML="<div style='text-align:center;color:var(--sub);padding:20px;font-size:13px;'>No hay viajes disponibles</div>";
+  });
+}
+
+// ---- MODAL DRIVER ----
+async function abrirModalDriver(id){
+  if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+  viajeActivoId=id;contadorOfertas=0;
+  const snap=await getDoc(doc(db,"viajes",id));
+  const v=snap.data();
+  const pub=v.timestamp?new Date(v.timestamp):null;
+  const secsT=pub?Math.floor((Date.now()-pub.getTime())/1000):TIMER_PUB_DUR;
+  if(secsT>=TIMER_PUB_DUR){toast("Este viaje ya expiro.");return;}
+  limpiarEstadoModal();
+  gi("driverOfertaContenido").innerHTML=
+    "<div style='text-align:center;margin-bottom:12px;'><img src='"+v.clienteFoto+"' style='width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--g);'><div style='font-weight:700;font-size:17px;margin-top:6px;'>"+v.clienteNombre+"</div></div>"
+    +"<div style='background:var(--card2);border-radius:10px;padding:10px;margin-bottom:10px;'>"
+    +"<div class='stat-row'><span class='stat-label'>Origen</span><span style='font-size:13px;'>"+v.origen+"</span></div>"
+    +"<div class='stat-row'><span class='stat-label'>Destino</span><span style='font-size:13px;'>"+v.destino+"</span></div>"
+    +"<div class='stat-row'><span class='stat-label'>Distancia</span><span class='stat-val'>"+v.distancia+"</span></div>"
+    +"<div class='stat-row'><span class='stat-label'>Tiempo</span><span class='stat-val'>"+v.tiempo+"</span></div>"
+    +"<div class='stat-row'><span class='stat-label'>Precio cliente</span><span class='stat-val' style='color:var(--yellow);'>$"+v.ofertaActual+"</span></div>"
+    +"<div class='stat-row'><span class='stat-label'>Pasajeros</span><span style='font-size:13px;'>"+v.personas+" pers &nbsp;"+v.bebes+" bebes &nbsp;"+v.mascotas+" masc &nbsp;"+v.carga+"KG</span></div>"
+    +"</div>"+(v.notas?"<div style='font-size:12px;background:var(--card2);padding:8px 10px;border-radius:8px;color:#ccc;margin-bottom:8px;'>"+v.notas+"</div>":"");
+
+  // NUEVO: Log del ID del viaje que el driver va a ofertar
+  console.log("[DRIVER] Modal abierto para viaje:",id,"| oferta cliente: $"+v.ofertaActual);
+
+  gi("modalDriver").classList.add("open");
+  escucharChatPrivadoModal(id);
+
+  unsubViajeModal=onSnapshot(doc(db,"viajes",id),s=>{
+    const vv=s.data();if(!vv)return;
+    if(vv.estado==="aceptado"&&vv.driverId===miUid){
+      const eb=gi("modalDriverEstado");eb.className="oferta-estado-box aceptada";eb.style.display="block";eb.innerText="El cliente acepto tu oferta! Preparando viaje...";
+      setTimeout(()=>{
+        if(gi("modalDriver").classList.contains("open")){
+          gi("modalDriver").classList.remove("open");currentChatTrip=id;
+          abrirChatDriver(id);if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+        }
+      },1500);return;
     }
-
-    ref = db.collection(
-        "viajes"
-    ).add(viaje)
-
-    viaje_id = ref[1].id
-
-    logger.info(f"Nuevo viaje: {viaje_id}")
-
-    return {
-
-        "id": viaje_id,
-        **viaje
+    if(vv.estado==="aceptado"&&vv.driverId&&vv.driverId!==miUid){
+      gi("modalDriver").classList.remove("open");limpiarEstadoModal();
+      toast("Este viaje fue tomado por otro conductor.");
+      if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+      if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+      return;
     }
-
-# ═══════════════════════════════════════════════════════════════
-# LISTAR VIAJES
-# ═══════════════════════════════════════════════════════════════
-
-@app.get(
-    "/viajes",
-    tags=["Viajes"]
-)
-async def listar_viajes(
-
-    user: dict = Depends(
-        require_role("driver", "admin")
-    )
-):
-
-    docs = (
-        db.collection("viajes")
-        .limit(20)
-        .get()
-    )
-
-    viajes = []
-
-    now = datetime.utcnow()
-
-    for d in docs:
-
-        v = d.to_dict()
-
-        ts = datetime.fromisoformat(
-            v["timestamp"]
-        )
-
-        elapsed = (
-            now - ts
-        ).total_seconds()
-
-        if elapsed > VIAJE_EXPIRY_SECONDS:
-
-            db.collection(
-                "viajes"
-            ).document(d.id).update({
-
-                "estado": "expirado"
-            })
-
-            continue
-
-        if v["estado"] in [
-            "buscando",
-            "contraoferta"
-        ]:
-
-            v["id"] = d.id
-
-            viajes.append(v)
-
-    return viajes
-
-# ═══════════════════════════════════════════════════════════════
-# CHAT
-# ═══════════════════════════════════════════════════════════════
-
-class ChatRequest(BaseModel):
-
-    msg: str
-
-LAST_MESSAGE_TIME = {}
-
-@app.post(
-    "/viajes/{viaje_id}/mensajes",
-    tags=["Chat"]
-)
-async def enviar_mensaje(
-
-    viaje_id: str,
-    body: ChatRequest,
-
-    user: dict = Depends(get_current_user)
-):
-
-    now = datetime.utcnow()
-
-    last = LAST_MESSAGE_TIME.get(
-        user["uid"]
-    )
-
-    if last:
-
-        diff = (
-            now - last
-        ).total_seconds()
-
-        if diff < 1:
-            raise HTTPException(
-                429,
-                "Muy rápido"
-            )
-
-    LAST_MESSAGE_TIME[
-        user["uid"]
-    ] = now
-
-    msg = {
-
-        "uid": user["uid"],
-        "nombre": user["nombre"],
-        "msg": body.msg.strip(),
-
-        "timestamp": now.isoformat()
+    if(vv.estado==="cancelado"){
+      gi("modalDriver").classList.remove("open");limpiarEstadoModal();
+      let msg="El viaje fue cancelado.";
+      if(vv.motivoCancelacion==="tiempo_agotado")msg="El tiempo de este viaje expiro.";
+      else if(vv.motivoCancelacion==="cliente_cancelo")msg="El cliente cancelo este viaje.";
+      else if(vv.motivoCancelacion==="sin_aceptacion")msg="El cliente no acepto ninguna oferta en el tiempo disponible.";
+      toast(msg,5000);
+      if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+      if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+      return;
     }
-
-    db.collection(
-        "viajes"
-    ).document(viaje_id).collection(
-        "mensajes"
-    ).add(msg)
-
-    return {"ok": True}
-
-# ═══════════════════════════════════════════════════════════════
-# GANANCIAS
-# ═══════════════════════════════════════════════════════════════
-
-@app.get(
-    "/ganancias/me",
-    tags=["Ganancias"]
-)
-async def ganancias(
-    user: dict = Depends(
-        require_role("driver")
-    )
-):
-
-    docs = (
-        db.collection("ganancias")
-        .where(
-            "driverId",
-            "==",
-            user["uid"]
-        )
-        .limit(50)
-        .get()
-    )
-
-    registros = []
-
-    total = 0
-
-    for d in docs:
-
-        r = d.to_dict()
-
-        registros.append(r)
-
-        total += float(
-            r.get("monto", 0)
-        )
-
-    comision = round(
-        total * APP_COMMISSION_RATE,
-        2
-    )
-
-    neto = round(
-        total - comision,
-        2
-    )
-
-    return {
-
-        "registros": registros,
-
-        "bruto": round(total, 2),
-
-        "comision": comision,
-
-        "neto": neto
+    if(vv.ultimaOfertaRechazadaDriver===miUid){
+      const eb=gi("modalDriverEstado");eb.className="oferta-estado-box rechazada";eb.style.display="block";
+      eb.innerText="El cliente rechazo tu oferta. Puedes enviar otra ("+contadorOfertas+"/3).";
     }
+  });
+}
 
-# ═══════════════════════════════════════════════════════════════
-# ADMIN
-# ═══════════════════════════════════════════════════════════════
+function limpiarEstadoModal(){
+  const eb=gi("modalDriverEstado");if(eb){eb.className="oferta-estado-box";eb.style.display="none";eb.innerText="";}
+  if(gi("contraOfertaDriver"))gi("contraOfertaDriver").value="";
+  contadorOfertas=0;viajeActivoId="";
+}
 
-@app.get(
-    "/admin/usuarios",
-    tags=["Admin"]
-)
-async def admin_users(
-    user: dict = Depends(
-        require_role("admin")
-    )
-):
+gi("btnContraOfertar").addEventListener("click",async()=>{
+  if(contadorOfertas>=3){toast("Maximo 3 ofertas por viaje");return;}
+  const valor=parseFloat(gi("contraOfertaDriver").value);
+  if(isNaN(valor)||valor<=0){alert("Ingresa un precio valido mayor a 0");return;}
+  contadorOfertas++;
+  const us=await getDoc(doc(db,"usuarios",miUid));const drv=us.data();
 
-    docs = (
-        db.collection(
-            "usuarios_publicos"
-        )
-        .limit(100)
-        .get()
-    )
+  // NUEVO: Log del ID del viaje al que el driver envia la oferta
+  console.log("[DRIVER] Enviando oferta $"+valor+" al viaje:",viajeActivoId,"| driver:",miNombre);
 
-    users = []
+  await addDoc(collection(db,"viajes",viajeActivoId,"ofertas"),{
+    driverId:miUid,driverNombre:drv.nombre||"",driverFoto:drv.fotoPerfil||"",
+    placa:drv.placa||"",marca:drv.marca||"",modelo:drv.modelo||"",
+    monto:valor,estado:"pendiente",timestamp:new Date().toISOString()
+  });
+  await updateDoc(doc(db,"viajes",viajeActivoId),{estado:"contraoferta",ultimaOfertaTs:new Date().toISOString()});
+  gi("contraOfertaDriver").value="";
+  const eb=gi("modalDriverEstado");eb.className="oferta-estado-box enviada";eb.style.display="block";
+  eb.innerText="Oferta de $"+valor.toFixed(2)+" enviada ("+contadorOfertas+"/3) - esperando respuesta del cliente...";
+  toast("Oferta $"+valor.toFixed(2)+" enviada al cliente");
+});
 
-    for d in docs:
+gi("btnRechazarViaje").addEventListener("click",async()=>{
+  gi("modalDriver").classList.remove("open");
+  if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+  if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+  limpiarEstadoModal();toast("Cerrado");
+});
 
-        users.append(d.to_dict())
+function escucharChatPrivadoModal(tripId){
+  if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+  if(!tripId)return;
+  unsubChatPrivado=onSnapshot(query(collection(db,"viajes",tripId,"chatPrivado"),orderBy("timestamp","asc")),snap=>{
+    const box=gi("driverChatPrivado");if(!box)return;box.innerHTML="";
+    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg "+(m.uid===miUid?"me":"");div.innerHTML="<b>"+m.nombre+"</b>"+m.msg;box.appendChild(div);});
+    box.scrollTop=box.scrollHeight;
+  });
+}
+gi("btnDrvMsgPriv").addEventListener("click",async()=>{
+  const inp=gi("driverChatInput2");if(!inp.value.trim()||!viajeActivoId)return;
+  await addDoc(collection(db,"viajes",viajeActivoId,"chatPrivado"),{uid:miUid,nombre:miNombre,msg:inp.value,timestamp:new Date().toISOString()});
+  inp.value="";
+});
 
-    return users
+// ---- LISTENER PRINCIPAL CLIENTE ----
+function escucharEstadoViajesCliente(){
+  if(unsubEstadoViajes){unsubEstadoViajes();unsubEstadoViajes=null;}
+  unsubEstadoViajes=onSnapshot(collection(db,"viajes"),snap=>{
+    snap.forEach(ds=>{
+      const v=ds.data();
+      if(v.clienteId!==miUid||ds.id!==currentChatTrip)return;
 
-# ═══════════════════════════════════════════════════════════════
-# HEALTH CHECK
-# ═══════════════════════════════════════════════════════════════
+      // NUEVO: Log del snap recibido
+      console.log("[CLIENTE] Snap viaje:",ds.id,"| estado:",v.estado);
 
-@app.get("/")
-async def root():
+      setBadge(v.estado);
+      if(v.estado==="contraoferta"){setBadge("contraoferta");}
+      if(v.estado==="aceptado"&&!chatClienteAbierto){
+        chatClienteAbierto=true;detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
+        if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+        gi("modalDriver").classList.remove("open");
+        abrirChatClienteFinal(ds.id);
+      }
+      if(v.estado==="finalizado"||v.estado==="cancelado"){
+        detenerTimerPub();detenerTimerOferta();ocultarOfertaToastActual();
+        cerrarChats();setBadge(null);chatClienteAbierto=false;
+        // NUEVO: Rehabilitar boton publicar al finalizar/cancelar
+        setPublicarHabilitado(true);
+        if(v.estado==="cancelado"){
+          if(v.motivoCancelacion==="tiempo_agotado")
+            toast("Tiempo agotado. No se encontro conductor. Puedes publicar de nuevo.",7000);
+          else if(v.motivoCancelacion==="sin_aceptacion")
+            toast("No aceptaste ninguna oferta a tiempo. Puedes publicar de nuevo.",7000);
+        }
+      }
+    });
+  });
+}
 
-    return {
+// ---- LISTENER DE OFERTAS ----
+let _ofertaOrigGlobal=0;
 
-        "app": "RUN CAR PRO MAX API",
+function escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor){
+  _ofertaOrigGlobal=ofertaOriginalValor;
+  if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+  debugLog("Iniciando listener ofertas: "+viajeId.slice(-6)+" | oferta base: $"+ofertaOriginalValor);
+  console.log("[CLIENTE] Listener ofertas iniciado para viaje:",viajeId);
 
-        "version": "2.0.0",
+  unsubOfertasCol=onSnapshot(
+    collection(db,"viajes",viajeId,"ofertas"),
+    snap=>{
+      debugLog("Snap ofertas recibido: "+snap.size+" docs");
+      console.log("[CLIENTE] Ofertas snap para viaje",viajeId,":",snap.size,"docs");
 
-        "status": "ok",
+      const todos=[];
+      snap.forEach(ds=>todos.push({id:ds.id,...ds.data()}));
+      todos.sort((a,b)=>{const ta=a.timestamp||"",tb=b.timestamp||"";return ta>tb?1:ta<tb?-1:0;});
 
-        "firebase": "connected"
+      let pendientes=0;
+      todos.forEach(o=>{
+        debugLog("Oferta: "+o.id.slice(-4)+" | estado:"+o.estado+" | driver:"+o.driverNombre+" | $"+o.monto);
+        if(o.estado==="pendiente"){
+          pendientes++;
+          if(!ofertasMostradas.has(o.id)){
+            debugLog("→ ENCOLANDO oferta nueva de "+o.driverNombre+" $"+o.monto);
+            console.log("[CLIENTE] Nueva oferta encolada:",o.id,"driver:",o.driverNombre,"$"+o.monto);
+            ofertasMostradas.add(o.id);
+            ofertasQueue.push({oferta:o,viajeId,ofertaOriginalValor});
+          }
+        }
+      });
+
+      const cnt=gi("ofertasContador");
+      if(pendientes>0){
+        cnt.style.display="block";
+        cnt.innerText=pendientes+" oferta"+(pendientes>1?"s":"")+" de conductor"+(pendientes>1?"es":"")+" disponible"+(pendientes>1?"s":"");
+        if(currentChatTrip===viajeId)setBadge("contraoferta");
+      }else{cnt.style.display="none";}
+
+      debugLog("Pendientes:"+pendientes+" | Cola:"+ofertasQueue.length+" | Mostrando:"+mostrandoOferta);
+      if(!mostrandoOferta&&ofertasQueue.length>0&&!chatClienteAbierto){
+        mostrarSiguienteOferta(viajeId,ofertaOriginalValor);
+      }
+    },
+    err=>{
+      debugLog("ERROR listener: "+err.code+" - "+err.message);
+      console.error("[CLIENTE] ERROR listener ofertas:",err);
+      if(err.code==="permission-denied"||err.code==="unavailable"){
+        debugLog("Reintentando listener en 3s...");
+        setTimeout(()=>{
+          if(currentChatTrip===viajeId&&!chatClienteAbierto){
+            escucharOfertasSubcoleccion(viajeId,ofertaOriginalValor);
+          }
+        },3000);
+      }
     }
+  );
+}
 
-# ═══════════════════════════════════════════════════════════════
-# MAIN
-# ═══════════════════════════════════════════════════════════════
+function mostrarSiguienteOferta(viajeId,ofertaOriginalValor){
+  if(ofertasQueue.length===0){mostrandoOferta=false;return;}
+  if(chatClienteAbierto){mostrandoOferta=false;return;}
+  mostrandoOferta=true;
+  const item=ofertasQueue.shift();
+  const{oferta}=item;
+  debugLog("Mostrando toast: "+oferta.driverNombre+" $"+oferta.monto);
+  console.log("[CLIENTE] Mostrando oferta:",oferta.id,oferta.driverNombre,"$"+oferta.monto);
+  ofertaToastActual={oferta,viajeId,ofertaOriginalValor:ofertaOriginalValor||_ofertaOrigGlobal};
+  gi("otFoto").src=oferta.driverFoto||"";
+  gi("otNombre").innerText=oferta.driverNombre||"Conductor";
+  gi("otVehiculo").innerText=(oferta.marca||"")+" "+(oferta.modelo||"");
+  gi("otPlaca").innerText=oferta.placa||"";
+  gi("otMonto").innerText=Number(oferta.monto).toFixed(2);
+  gi("otOfertaOriginal").innerText=Number(ofertaOriginalValor||_ofertaOrigGlobal).toFixed(2);
+  gi("ofertaToast").classList.add("visible");
+  iniciarTimerOferta();
+}
 
-if __name__ == "__main__":
+function ocultarOfertaToastActual(){
+  gi("ofertaToast").classList.remove("visible");
+  ofertaToastActual=null;
+  detenerTimerOferta();
+}
 
-    import uvicorn
+gi("btnAceptarOfertaToast").addEventListener("click",async()=>{
+  if(!ofertaToastActual||!currentChatTrip)return;
+  detenerTimerOferta();
+  const{oferta,viajeId}=ofertaToastActual;
+  console.log("[CLIENTE] Aceptando oferta",oferta.id,"del driver",oferta.driverNombre,"$"+oferta.monto);
+  await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"aceptada"});
+  await updateDoc(doc(db,"viajes",viajeId),{
+    estado:"aceptado",ofertaActual:oferta.monto,
+    driverId:oferta.driverId,driverNombre:oferta.driverNombre,driverFoto:oferta.driverFoto,
+    placa:oferta.placa,marca:oferta.marca,modelo:oferta.modelo
+  });
+  detenerTimerPub();ocultarOfertaToastActual();chatClienteAbierto=true;
+  mostrandoOferta=false;ofertasQueue.length=0;
+  if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+  abrirChatClienteFinal(viajeId);toast("Oferta aceptada! Tu conductor esta en camino.");
+});
 
-    uvicorn.run(
+gi("btnRechazarOfertaToast").addEventListener("click",async()=>{
+  if(!ofertaToastActual||!currentChatTrip)return;
+  detenerTimerOferta();
+  const{oferta,viajeId,ofertaOriginalValor}=ofertaToastActual;
+  const origVal=ofertaOriginalValor||_ofertaOrigGlobal;
+  console.log("[CLIENTE] Rechazando oferta",oferta.id,"del driver",oferta.driverNombre);
+  await updateDoc(doc(db,"viajes",viajeId,"ofertas",oferta.id),{estado:"rechazada"});
+  await updateDoc(doc(db,"viajes",viajeId),{ultimaOfertaRechazadaDriver:oferta.driverId});
+  ocultarOfertaToastActual();mostrandoOferta=false;
+  toast("Oferta rechazada.");setBadge("buscando");
+  setTimeout(()=>mostrarSiguienteOferta(viajeId,origVal),400);
+});
 
-        "runcar_backend:app",
+async function abrirChatClienteFinal(id){
+  currentChatTrip=id;viajeActivoId=id;
+  if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+  const vs=await getDoc(doc(db,"viajes",id));const v=vs.data();
+  const cs=await getDoc(doc(db,"usuarios",v.clienteId));const cli=cs.exists()?cs.data():{};
+  if(v.origenLat)viajeOrigenCoords={lat:v.origenLat,lng:v.origenLng};
+  if(v.destinoLat)viajeDestinoCoords={lat:v.destinoLat,lng:v.destinoLng};
+  if(viajeOrigenCoords&&viajeDestinoCoords)gi("cliDistViaje").innerText=distKm(viajeOrigenCoords.lat,viajeOrigenCoords.lng,viajeDestinoCoords.lat,viajeDestinoCoords.lng).toFixed(1);
+  gi("chatCardCliente").style.display="";
+  gi("cliChatFotoCli").src=cli.fotoPerfil||miFoto||"";gi("cliChatNombreCli").innerText=v.clienteNombre||"";
+  gi("cliChatFotoDrv").src=v.driverFoto||"";gi("cliChatNombreDrv").innerText=v.driverNombre||"";
+  gi("cliChatVehiculo").innerText=(v.marca||"")+" "+(v.modelo||"");gi("cliChatPlaca").innerText=v.placa||"";
+  chatMapCli=null;markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
+  setTimeout(()=>{initChatMapCli(v);escucharPosDrv(id);},200);
+  escucharMensajesChat(id,"chatBox");escucharEstadoFinalViaje(id);
+  setBadge("aceptado");
+  setTimeout(()=>gi("chatCardCliente").scrollIntoView({behavior:"smooth"}),400);
+}
 
-        host="0.0.0.0",
+async function abrirChatDriver(id){
+  currentChatTrip=id;viajeActivoId=id;
+  const vs=await getDoc(doc(db,"viajes",id));const v=vs.data();
+  const cs=await getDoc(doc(db,"usuarios",v.clienteId));const cli=cs.exists()?cs.data():{};
+  if(v.origenLat)viajeOrigenCoords={lat:v.origenLat,lng:v.origenLng};
+  if(v.destinoLat)viajeDestinoCoords={lat:v.destinoLat,lng:v.destinoLng};
+  if(viajeOrigenCoords&&viajeDestinoCoords)gi("drvDistViaje").innerText=distKm(viajeOrigenCoords.lat,viajeOrigenCoords.lng,viajeDestinoCoords.lat,viajeDestinoCoords.lng).toFixed(1);
+  gi("chatCardDriver").style.display="";
+  gi("drvChatFotoCli").src=cli.fotoPerfil||"";gi("drvChatNombreCli").innerText=v.clienteNombre||"";
+  gi("drvChatFotoDrv").src=v.driverFoto||miFoto||"";gi("drvChatNombreDrv").innerText=v.driverNombre||"";
+  gi("drvChatVehiculo").innerText=(v.marca||"")+" "+(v.modelo||"");gi("drvChatPlaca").innerText=v.placa||"";
+  chatMapDrv=null;markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
+  setTimeout(()=>{initChatMapDrv(v);},200);
+  onSnapshot(doc(db,"viajes",id),snap=>{
+    const vv=snap.data();if(!vv)return;
+    if(miLat&&vv.clienteLat){const km=distKm(miLat,miLng,vv.clienteLat,vv.clienteLng);gi("drvDistKm").innerText=km.toFixed(1);gi("drvEta").innerText=Math.ceil(km/0.5);}
+    if(chatMapDrv&&markerDrvLive&&miLat)markerDrvLive.setLatLng([miLat,miLng]);
+  });
+  escucharMensajesChat(id,"driverChatBox");escucharEstadoFinalViaje(id);
+  setTimeout(()=>gi("chatCardDriver").scrollIntoView({behavior:"smooth"}),400);
+}
 
-        port=8000,
+function escucharMensajesChat(tripId,boxId){
+  onSnapshot(query(collection(db,"viajes",tripId,"mensajes"),orderBy("timestamp","asc")),snap=>{
+    const box=gi(boxId);if(!box)return;box.innerHTML="";
+    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg "+(m.uid===miUid?"me":m.uid==="sistema"?"sys":"");div.innerHTML=m.uid==="sistema"?m.msg:"<b>"+m.nombre+"</b>"+m.msg;box.appendChild(div);});
+    box.scrollTop=box.scrollHeight;
+  });
+}
 
-        reload=True
-    )
+gi("btnEnviarMensaje").addEventListener("click",async()=>{
+  if(!currentChatTrip){toast("No hay viaje activo");return;}
+  const inp=gi("chatInput");if(!inp.value.trim())return;
+  await addDoc(collection(db,"viajes",currentChatTrip,"mensajes"),{uid:miUid,nombre:miNombre,foto:miFoto,msg:inp.value,timestamp:new Date().toISOString()});
+  inp.value="";
+});
+gi("btnDriverEnviarMensaje").addEventListener("click",async()=>{
+  if(!currentChatTrip)return;const inp=gi("driverChatInput");if(!inp.value.trim())return;
+  await addDoc(collection(db,"viajes",currentChatTrip,"mensajes"),{uid:miUid,nombre:miNombre,foto:miFoto,msg:inp.value,timestamp:new Date().toISOString()});
+  inp.value="";
+});
+
+function escucharMensajesGenerales(){
+  onSnapshot(query(collection(db,"mensajesGenerales"),orderBy("timestamp","desc"),limit(20)),snap=>{
+    const box=gi("mensajesGeneralesDriver");if(!box)return;box.innerHTML="";
+    snap.forEach(d=>{const m=d.data();const div=document.createElement("div");div.className="msg sys";div.innerHTML="Aviso de "+(m.de||"Admin")+": "+m.msg;box.appendChild(div);});
+  });
+  onSnapshot(query(collection(db,"notificacionesDrivers"),orderBy("timestamp","desc"),limit(5)),snap=>{
+    snap.forEach(d=>{const m=d.data();if(m.tipo==="asignado"){gi("asignadoMsg").style.display="block";gi("asignadoMsg").innerText=m.mensaje;setTimeout(()=>gi("asignadoMsg").style.display="none",8000);}});
+  });
+}
+
+async function cargarGananciasDriver(){
+  onSnapshot(query(collection(db,"ganancias"),where("driverId","==",miUid),limit(50)),snap=>{
+    const box=gi("gananciasBox");if(!box)return;box.innerHTML="";
+    let total=0;const dias={};const docs=[];snap.forEach(d=>docs.push(d));
+    docs.sort((a,b)=>{const fa=a.data().fecha||"",fb=b.data().fecha||"";return fb>fa?1:fb<fa?-1:0;});
+    docs.forEach(d=>{const g=d.data();const f=g.fecha||"Sin fecha";if(!dias[f])dias[f]=0;dias[f]+=Number(g.monto||0);total+=Number(g.monto||0);});
+    Object.entries(dias).slice(0,5).forEach(([f,m])=>{const c=m*0.08;box.innerHTML+="<div style='display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--card2);border-radius:8px;margin-bottom:6px;'><div><div style='font-size:13px;font-weight:700;'>"+f+"</div><div style='font-size:11px;color:var(--sub);'>Comision: <span style='color:var(--red);'>-$"+c.toFixed(2)+"</span></div></div><div style='font-family:Rajdhani,sans-serif;font-size:18px;color:var(--g);font-weight:700;'>$"+m.toFixed(2)+"</div></div>";});
+    const c=total*0.08;gi("bruto").innerText="$"+total.toFixed(2);gi("comision").innerText="$"+c.toFixed(2);gi("neto").innerText="$"+(total-c).toFixed(2);
+  });
+}
+
+async function cargarAdminData(){
+  onSnapshot(collection(db,"ganancias"),snap=>{
+    let total=0;snap.forEach(d=>{total+=Number(d.data().monto||0);});
+    const c=total*0.08;gi("adminBruto").innerText="$"+total.toFixed(2);gi("adminComision").innerText="$"+c.toFixed(2);
+    const box=gi("adminGananciasBox");if(!box)return;box.innerHTML="";
+    snap.forEach(d=>{const g=d.data();box.innerHTML+="<div class='trip-card' style='display:flex;justify-content:space-between;align-items:center;padding:8px;'><div><div style='font-size:13px;font-weight:700;'>"+(g.driverNombre||"Driver")+"</div><div style='font-size:11px;color:var(--sub);'>"+(g.fecha||"")+"</div></div><div><span class='badge badge-g'>$"+Number(g.monto||0).toFixed(2)+"</span><span class='badge badge-r' style='margin-left:4px;'>-$"+(Number(g.monto||0)*0.08).toFixed(2)+"</span></div></div>";});
+  });
+  const uSnap=await getDocs(collection(db,"usuarios"));
+  const box=gi("adminUsuariosBox");let rows="";
+  uSnap.forEach(d=>{
+    const u=d.data();
+    rows+="<tr><td><img src='"+(u.fotoPerfil||"")+"' style='width:34px;height:34px;border-radius:50%;object-fit:cover;'></td><td>"+u.nombre+"</td><td><span class='badge "+(u.rol==="driver"?"badge-b":"badge-g")+"'>"+u.rol+"</span></td><td><span class='badge "+(u.estado==="activo"?"badge-g":"badge-r")+"'>"+(u.estado||"activo")+"</span></td><td><button class='btn btn-sm' style='width:auto;padding:5px 10px;font-size:11px;background:"+(u.estado==="activo"?"var(--red)":"var(--g)")+";color:"+(u.estado==="activo"?"#fff":"#000")+";' data-uid='"+u.uid+"' data-estado='"+(u.estado||"activo")+"'>"+(u.estado==="activo"?"Desactivar":"Activar")+"</button></td></tr>";
+  });
+  box.innerHTML="<table class='admin-table'><thead><tr><th></th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Accion</th></tr></thead><tbody>"+rows+"</tbody></table>";
+  box.querySelectorAll("button[data-uid]").forEach(btn=>{
+    btn.addEventListener("click",async()=>{
+      const uid=btn.dataset.uid,ne=btn.dataset.estado==="activo"?"inactivo":"activo";
+      await updateDoc(doc(db,"usuarios",uid),{estado:ne});
+      toast("Usuario "+(ne==="activo"?"activado":"desactivado"));cargarAdminData();
+    });
+  });
+}
+gi("btnAdminEnviarMsg").addEventListener("click",async()=>{
+  const msg=sv("adminMsgTxt");if(!msg){alert("Escribe un mensaje");return;}
+  await addDoc(collection(db,"mensajesGenerales"),{msg,de:miNombre,timestamp:new Date().toISOString()});
+  gi("adminMsgTxt").value="";toast("Mensaje enviado a todos los drivers");
+});
+
+async function finalizarViaje(){
+  if(!currentChatTrip)return;
+  const vs=await getDoc(doc(db,"viajes",currentChatTrip));const v=vs.data();
+  const monto=v.ofertaActual||0;const fecha=new Date().toLocaleDateString("es-SV");
+  await addDoc(collection(db,"ganancias"),{driverId:v.driverId||"",driverNombre:v.driverNombre||"",clienteNombre:v.clienteNombre||"",monto:Number(monto),fecha,viajeId:currentChatTrip,timestamp:new Date().toISOString()});
+  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"finalizado",fechaFin:new Date().toISOString()});
+  await addDoc(collection(db,"viajes",currentChatTrip,"mensajes"),{uid:"sistema",nombre:"Sistema",foto:"",msg:"Viaje finalizado. Monto: $"+Number(monto).toFixed(2),timestamp:new Date().toISOString()});
+  toast("Viaje finalizado correctamente");cerrarChats();
+}
+async function cancelarViaje(){
+  if(!currentChatTrip)return;
+  await updateDoc(doc(db,"viajes",currentChatTrip),{estado:"cancelado",fechaCancelacion:new Date().toISOString(),motivoCancelacion:"usuario_cancelo"});
+  await addDoc(collection(db,"viajes",currentChatTrip,"mensajes"),{uid:"sistema",nombre:"Sistema",foto:"",msg:"El viaje fue cancelado.",timestamp:new Date().toISOString()});
+  toast("Viaje cancelado");cerrarChats();
+}
+
+function cerrarChats(){
+  detenerTimerPub();detenerTimerOferta();
+  if(gi("chatCardCliente"))gi("chatCardCliente").style.display="none";
+  if(gi("chatCardDriver"))gi("chatCardDriver").style.display="none";
+  gi("modalDriver").classList.remove("open");
+  ocultarOfertaToastActual();
+  currentChatTrip=null;viajeActivoId="";chatClienteAbierto=false;mostrandoOferta=false;
+  markerDrvLive=null;markerCliLive=null;markerDestinoChat=null;
+  viajeOrigenCoords=null;viajeDestinoCoords=null;
+  chatMapCli=null;chatMapDrv=null;
+  ofertasMostradas.clear();ofertasQueue.length=0;ofertaToastActual=null;
+  gi("ofertasContador").style.display="none";
+  gi("btnCancelarViajePublicado").style.display="none";
+  // NUEVO: Rehabilitar boton publicar al cerrar chats
+  setPublicarHabilitado(true);
+  limpiarEstadoModal();
+  if(unsubViajeModal){unsubViajeModal();unsubViajeModal=null;}
+  if(unsubChatPrivado){unsubChatPrivado();unsubChatPrivado=null;}
+  if(unsubOfertasCol){unsubOfertasCol();unsubOfertasCol=null;}
+  Object.keys(_rutasCache).forEach(k=>delete _rutasCache[k]);
+}
+
+function escucharEstadoFinalViaje(viajeId){
+  onSnapshot(doc(db,"viajes",viajeId),snap=>{
+    const v=snap.data();if(!v)return;
+    if(v.estado==="finalizado"||v.estado==="cancelado"){
+      if(v.estado==="cancelado")toast("El viaje fue cancelado.");
+      if(v.estado==="finalizado")toast("Viaje finalizado.");
+      cerrarChats();
+      // NUEVO: Siempre rehabilitar al finalizar/cancelar desde cualquier flujo
+      setPublicarHabilitado(true);
+    }
+  });
+}
+
+gi("btnFinalizarCliente").addEventListener("click",async()=>{if(!confirm("Confirmar viaje completado?"))return;await finalizarViaje();});
+gi("btnCancelarCliente").addEventListener("click",async()=>{if(!confirm("Cancelar el viaje?"))return;await cancelarViaje();});
+gi("btnFinalizarDriver").addEventListener("click",async()=>{if(!confirm("Confirmar finalizacion del viaje?"))return;await finalizarViaje();});
+gi("btnCancelarDriver").addEventListener("click",async()=>{if(!confirm("Cancelar el viaje?"))return;await cancelarViaje();});
+</script>
+</body>
+</html>
